@@ -1,0 +1,10 @@
+package: github.com/ikedam/gaeapp
+import:
+- package: github.com/labstack/echo
+  # Should be < v3.2.0 as 3.2.0 works only with go >= 1.7
+  version: v3.1.0
+  subpackages:
+  - middleware
+- package: github.com/mjibson/goon
+# golang.org/x/crypto should be b5cf4d8d48698c1f6d3b57b8c893e580aa2a4db1 or prior
+# as the later versions work only with go >= 1.7
