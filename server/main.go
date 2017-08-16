@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	"github.com/mjibson/goon"
 )
 
 var (
@@ -13,6 +14,8 @@ var (
 )
 
 func init() {
+	goon.LogErrors = false
+
 	e := echo.New()
 
 	e.Use(middleware.Recover())

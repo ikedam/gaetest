@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,11 +32,14 @@ func callHandlerEntityListGet(t *testing.T, inst aetest.Instance) (*httptest.Res
 
 func callHandlerEntityPost(t *testing.T, inst aetest.Instance, reqdata interface{}) (*httptest.ResponseRecorder, error) {
 	var data []byte
-	if _data, err := json.Marshal(reqdata); err != nil {
+	var err error
+	if data, err = json.Marshal(reqdata); err != nil {
 		t.Fatalf("Failt to request POST /entity/: %v", err)
-	} else {
-		data = _data
 	}
+	return callHandlerEntityPostRaw(t, inst, data)
+}
+
+func callHandlerEntityPostRaw(t *testing.T, inst aetest.Instance, data []byte) (*httptest.ResponseRecorder, error) {
 	req, err := inst.NewRequest("POST", "/entity/", bytes.NewReader(data))
 	if err != nil {
 		panic(err)
@@ -63,7 +68,7 @@ func TestEntity(t *testing.T) {
 
 	// 最初はリストに何も返らない
 	if res, err := callHandlerEntityListGet(t, inst); err != nil {
-		t.Fatalf("Expected empty but %v", err)
+		t.Fatalf("Expected no error but %v", err)
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
@@ -85,7 +90,7 @@ func TestEntity(t *testing.T) {
 	}{
 		Name: "Testdata1",
 	}); err != nil {
-		t.Fatalf("Expected empty but %v", err)
+		t.Fatalf("Expected no error but %v", err)
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
@@ -112,7 +117,7 @@ func TestEntity(t *testing.T) {
 	}
 	// 投入したデータが得られる
 	if res, err := callHandlerEntityListGet(t, inst); err != nil {
-		t.Fatalf("Expected empty but %v", err)
+		t.Fatalf("Expected no error but %v", err)
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
@@ -138,7 +143,7 @@ func TestEntity(t *testing.T) {
 	}{
 		Name: "Testdata2",
 	}); err != nil {
-		t.Fatalf("Expected empty but %v", err)
+		t.Fatalf("Expected no error but %v", err)
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
@@ -147,7 +152,7 @@ func TestEntity(t *testing.T) {
 
 	// 投入の逆順にデータが返る
 	if res, err := callHandlerEntityListGet(t, inst); err != nil {
-		t.Fatalf("Expected empty but %v", err)
+		t.Fatalf("Expected no error but %v", err)
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
@@ -167,6 +172,140 @@ func TestEntity(t *testing.T) {
 					t.Errorf("Expect Testdata1, but was %v", result[1].Name)
 				}
 			}
+		}
+	}
+}
+
+func TestEntityHandlerEntityListGetDatastoreError(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+	mocker := testutil.NewAppengineMock()
+	mocked := mocker.MockInstance(inst)
+	if mocked == nil {
+		t.Skip("MockInstance is not supported")
+	}
+	mocker.AddAPICallMock(testutil.AppengineAPICallMock{
+		Service: "datastore",
+		Method:  "RunQuery",
+		Error:   errors.New("Expected error"),
+	})
+
+	if res, err := callHandlerEntityListGet(t, mocked); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusInternalServerError {
+			t.Errorf("Expected 500, but %v", res.Code)
+		}
+		errorLogList := mocker.GetLogsEqualTo(testutil.LogLevelError)
+		if len(errorLogList) != 0 {
+			if errorLogList[len(errorLogList)-1] != "Failed to query Entity: Expected error" {
+				t.Errorf("Unexpected error message: %v", errorLogList)
+			}
+		}
+	}
+}
+
+func TestEntityHandlerEntityPostDatastorePutError(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+	mocker := testutil.NewAppengineMock()
+	mocked := mocker.MockInstance(inst)
+	if mocked == nil {
+		t.Skip("MockInstance is not supported")
+	}
+	mocker.AddAPICallMock(testutil.AppengineAPICallMock{
+		Service: "datastore",
+		Method:  "Put",
+		Error:   errors.New("Expected error"),
+	})
+
+	if res, err := callHandlerEntityPost(t, mocked, &struct {
+		Name string `json:"name"`
+	}{
+		Name: "Testdata1",
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusInternalServerError {
+			t.Errorf("Expected 500, but %v", res.Code)
+		}
+		errorLogList := mocker.GetLogsEqualTo(testutil.LogLevelError)
+		if len(errorLogList) != 0 {
+			if errorLogList[len(errorLogList)-1] != "Failed to put Entity: Expected error" {
+				t.Errorf("Unexpected error message: %v", errorLogList)
+			}
+		}
+	}
+}
+
+func TestEntityHandlerEntityPostDatastoreGetError(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+	mocker := testutil.NewAppengineMock()
+	mocked := mocker.MockInstance(inst)
+	if mocked == nil {
+		t.Skip("MockInstance is not supported")
+	}
+	mocker.AddAPICallMock(testutil.AppengineAPICallMock{
+		Service: "datastore",
+		Method:  "Get",
+		Error:   errors.New("Expected error"),
+	})
+
+	if res, err := callHandlerEntityPost(t, mocked, &struct {
+		Name string `json:"name"`
+	}{
+		Name: "Testdata1",
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusInternalServerError {
+			t.Errorf("Expected 500, but %v", res.Code)
+		}
+		errorLogList := mocker.GetLogsEqualTo(testutil.LogLevelError)
+		if len(errorLogList) != 0 {
+			if !strings.HasPrefix(errorLogList[len(errorLogList)-1], "Failed to re-get Entity: Expected error, key=") {
+				t.Errorf("Unexpected error message: %v", errorLogList)
+			}
+		}
+	}
+}
+
+func TestEntityHandlerEntityPostMemcacheError(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+	mocker := testutil.NewAppengineMock()
+	mocked := mocker.MockInstance(inst)
+	if mocked == nil {
+		t.Skip("MockInstance is not supported")
+	}
+	mocker.AddAPICallMock(testutil.AppengineAPICallMock{
+		Service: "memcache",
+		Error:   errors.New("Expected error"),
+	})
+
+	if res, err := callHandlerEntityPost(t, mocked, &struct {
+		Name string `json:"name"`
+	}{
+		Name: "Testdata1",
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusOK {
+			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		errorLogList := mocker.GetLogsEqualTo(testutil.LogLevelError)
+		if len(errorLogList) != 0 {
+			t.Errorf("Expected no error messages, but was: %v", errorLogList)
+		}
+	}
+}
+
+
+func TestEntityHandlerEntityPostBadRequestError(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+
+	if res, err := callHandlerEntityPostRaw(t, inst, []byte("xxxx")); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400, but %v", res.Code)
 		}
 	}
 }

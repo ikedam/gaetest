@@ -2,10 +2,17 @@ package testutil
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
+	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/memcache"
 )
 
@@ -88,7 +95,7 @@ func TestAppengineMockService(t *testing.T) {
 
 	mocker.AddAPICallMock(AppengineAPICallMock{
 		Service: "datastore",
-		Error: expectError,
+		Error:   expectError,
 	})
 
 	e := entity{
@@ -102,7 +109,7 @@ func TestAppengineMockService(t *testing.T) {
 	}
 
 	item := memcache.Item{
-		Key:"key",
+		Key:   "key",
 		Value: []byte("bar"),
 	}
 
@@ -112,7 +119,7 @@ func TestAppengineMockService(t *testing.T) {
 
 	mocker.AddAPICallMock(AppengineAPICallMock{
 		Service: "memcache",
-		Error: expectError,
+		Error:   expectError,
 	})
 
 	if err := memcache.Set(mocked, &item); err != expectError {
@@ -129,8 +136,8 @@ func TestAppengineMockMethod(t *testing.T) {
 
 	mocker.AddAPICallMock(AppengineAPICallMock{
 		Service: "datastore",
-		Method: "Get",
-		Error: expectError,
+		Method:  "Get",
+		Error:   expectError,
 	})
 
 	e := entity{
@@ -147,5 +154,67 @@ func TestAppengineMockMethod(t *testing.T) {
 
 	if err := datastore.Get(mocked, key, &e); err != expectError {
 		t.Fatalf("Expect %v, but was %v", expectError, err)
+	}
+}
+
+func handlerTest(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	key := datastore.NewIncompleteKey(c, "entity", nil)
+	e := entity{
+		Value: r.FormValue("value"),
+	}
+	var err error
+	if key, err = datastore.Put(c, key, &e); err != nil {
+		log.Errorf(c, "Error in Put: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err = datastore.Get(c, key, &e); err != nil {
+		log.Errorf(c, "Error in Get: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(w, "Got: %v", e)
+}
+
+func TestMockInstance(t *testing.T) {
+	inst := GetAppengineInstance()
+	mocker := NewAppengineMock()
+	mocked := mocker.MockInstance(inst)
+	if mocked == nil {
+		t.Skip("MockInstance is not supported")
+	}
+
+	var expectError = errors.New("Expected error")
+
+	mocker.AddAPICallMock(AppengineAPICallMock{
+		Service: "datastore",
+		Method:  "Get",
+		Error:   expectError,
+	})
+
+	data := url.Values{}
+	data.Add("value", "test")
+	req, err := mocked.NewRequest("POST", "/entity/", strings.NewReader(data.Encode()))
+	if err != nil {
+		panic(err)
+	}
+	w := httptest.NewRecorder()
+	handlerTest(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500, but was %v", w)
+	}
+
+	// 残念ながら log.Query はテスト環境では機能しないため、
+	// 独自のログレコーダーで結果をチェック
+	errorLogList := mocker.GetLogsEqualTo(LogLevelError)
+	if len(errorLogList) != 0 {
+		// ログが取得できない場合を考慮
+		if len(errorLogList) != 1 {
+			t.Errorf("Expect 1 error, but: %v", errorLogList)
+		} else if errorLogList[0] != "Error in Get: Expected error" {
+			t.Errorf("Unexpected error message: %v", errorLogList)
+		}
 	}
 }

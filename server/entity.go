@@ -45,8 +45,11 @@ func handlerEntityPost(c echo.Context) error {
 		log.Errorf(ctx, "Failed to put Entity: %v", err)
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
-	if err := datastore.Get(ctx, key, &entity); err != nil {
-		log.Errorf(ctx, "Failed to re-get Entity: %v, %v", key, err)
+	g.FlushLocalCache()
+	entity.ID = key.IntID()
+	if err := g.Get(&entity); err != nil {
+		// goon may log if configured inappropriately.
+		log.Errorf(ctx, "Failed to re-get Entity: %v, key=%v", err, key)
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(
