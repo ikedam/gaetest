@@ -1,0 +1,12 @@
+<h2>
+  Entity Add New one
+</h2>
+<a routerLink="../list">Back</a>
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <dl>
+    <dt>名前</dt>
+    <dd><input name="name" type="text" formControlName="name"></dd>
+    <dd *ngIf="form.controls.name.touched && form.controls.name.errors?.required">入力してください</dd>
+  </dl>
+  <button type="submit" [disabled]="form.invalid || submitted">登録</button>
+</form>
