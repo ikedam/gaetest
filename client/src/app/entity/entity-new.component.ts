@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
   templateUrl: './entity-new.component.html',
@@ -14,7 +15,11 @@ export class EntityNewComponent implements OnInit {
 
   submitted = false;
 
-  constructor(private builder: FormBuilder) {
+  constructor(
+    private builder: FormBuilder,
+    private router: Router,
+    private activatedRoute: ActivatedRoute,
+  ) {
   }
 
   ngOnInit() {
@@ -23,5 +28,6 @@ export class EntityNewComponent implements OnInit {
 
   submit() {
     this.submitted = true;
+    this.router.navigate(['../list'], {relativeTo: this.activatedRoute});
   }
 }

@@ -1,7 +1,21 @@
-<!--The content below is only a placeholder and can be replaced.-->
-<div style="text-align:center">
-  <h1>
-    Welcome to {{title}}!
-  </h1>
-</div>
+<header class="navbar navbar-dark bg-dark navbar-fixed-top navbar-expand-md">
+  <a class="navbar-brand" routerLink="/" (click)="collapseAll();">{{title}}</a>
+
+  <button class="navbar-toggler navbar-toggler-right" type="button" (click)="navbarCollapsed = !navbarCollapsed"
+    [attr.aria-expanded]="!navbarCollapsed" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+       <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="navbar-collapse" [ngbCollapse]="navbarCollapsed" id="navbarContent">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item dropdown" routerLinkActive="active">
+        <a class="nav-link dropdown-toggle" id="dropdown01" (click)="entityCollapsed = !entityCollapsed" aria-haspopup="true" [attr.aria-expanded]="entityCollapsed">Entity</a>
+        <div class="dropdown-menu" [ngbCollapse]="entityCollapsed" aria-labelledby="dropdown01">
+          <a class="dropdown-item" routerLink="entity/list" routerLinkActive="active" (click)="collapseAll();">List</a>
+          <a class="dropdown-item" routerLink="entity/new" routerLinkActive="active" (click)="collapseAll();">New</a>
+        </div>
+      </li>
+    </ul>
+  </div>
+</header>
 <router-outlet></router-outlet>

@@ -1,14 +1,18 @@
-<h2>
-  Entity List
-</h2>
-<a routerLink="../new">Add</a>
-<table>
-  <tr>
-    <th>名前</th>
-    <th>作成日時</th>
-  </tr>
-  <tr *ngFor="let entity of entityList">
-    <td>{{entity.name}}</td>
-    <td>{{entity.createdAt}}</td>
-  </tr>
+<div class="container-fluid">
+<h1>Entity List</h1>
+<table class="table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>作成日時</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let entity of entityList">
+      <td>{{entity.name}}</td>
+      <td>{{entity.createdAt}}</td>
+    </tr>
+  </tbody>
 </table>
+<a class="btn btn-primary" routerLink="../new" role="button">Add</a>
+</div>

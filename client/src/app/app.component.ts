@@ -7,4 +7,11 @@ import { Component } from '@angular/core';
 })
 export class AppComponent {
   title = 'gaetest';
+  navbarCollapsed = true;
+  entityCollapsed = true;
+
+  collapseAll() {
+    this.navbarCollapsed = true;
+    this.entityCollapsed = true;
+  }
 }

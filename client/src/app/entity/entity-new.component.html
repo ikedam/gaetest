@@ -1,12 +1,14 @@
-<h2>
-  Entity Add New one
-</h2>
+<div class="container-fluid">
+<h1>Add Entity</h1>
 <a routerLink="../list">Back</a>
 <form [formGroup]="form" (ngSubmit)="submit()">
-  <dl>
-    <dt>名前</dt>
-    <dd><input name="name" type="text" formControlName="name"></dd>
-    <dd *ngIf="form.controls.name.touched && form.controls.name.errors?.required">入力してください</dd>
-  </dl>
-  <button type="submit" [disabled]="form.invalid || submitted">登録</button>
+  <div class="form-group row" [class.has-danger]="form.controls.name.touched && form.controls.name.invalid">
+    <label for="name" class="col-md-2 col-form-label form-control-label">名前</label>
+    <div class="col-md-10">
+      <input id="name" class="form-control" name="name" type="text" formControlName="name">
+      <p class="form-text text-danger" *ngIf="form.controls.name.touched && form.controls.name.errors?.required">入力してください</p>
+    </div>
+  </div>
+  <button class="btn btn-primary" type="submit" [disabled]="form.invalid || submitted">登録</button>
 </form>
+</div>
