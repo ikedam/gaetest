@@ -3,6 +3,7 @@ import { Component, OnInit } from '@angular/core';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 import { Entity } from './entity';
+import { EntityService } from './entity.service';
 
 @Component({
   templateUrl: './entity-list.component.html',
@@ -11,27 +12,21 @@ import { Entity } from './entity';
 export class EntityListComponent implements OnInit {
   entityList: Entity[] = [];
 
+  constructor(private entityService: EntityService) {
+  }
+
   ngOnInit() {
-    {
-      const entity = new Entity();
-      entity.id = 1;
-      entity.name = 'テスト1';
-      entity.createdAt = new Date();
-      this.entityList.push(entity);
-    }
-    {
-      const entity = new Entity();
-      entity.id = 2;
-      entity.name = 'テスト2';
-      entity.createdAt = new Date();
-      this.entityList.push(entity);
-    }
-    {
-      const entity = new Entity();
-      entity.id = 3;
-      entity.name = 'テスト3';
-      entity.createdAt = new Date();
-      this.entityList.push(entity);
-    }
+    this.entityService.getEntityList().then(
+      entityList => {
+        this.entityList = entityList;
+      }
+    );
+    /*
+    this.entityList = [
+      new Entity({name: 'テスト1',}),
+      new Entity({name: 'テスト2',}),
+      new Entity({name: 'テスト3',}),
+    ];
+    */
   }
 }
