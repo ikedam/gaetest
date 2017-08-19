@@ -1,6 +1,6 @@
 <div class="container-fluid">
 <h1>Entity List</h1>
-<table class="table">
+<table class="table entity-list">
   <thead>
     <tr>
       <th>名前</th>
@@ -9,10 +9,10 @@
   </thead>
   <tbody>
     <tr *ngFor="let entity of entityList">
-      <td>{{entity.name}}</td>
-      <td>{{entity.createdAt}}</td>
+      <td class="entity-name">{{entity.name}}</td>
+      <td class="entity-created-at">{{entity.createdAt}}</td>
     </tr>
   </tbody>
 </table>
-<a class="btn btn-primary" routerLink="../new" role="button">Add</a>
+<a class="btn btn-primary add-link" routerLink="../new" role="button">Add</a>
 </div>

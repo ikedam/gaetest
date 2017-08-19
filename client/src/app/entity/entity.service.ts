@@ -13,8 +13,8 @@ export class EntityService {
   getEntityList(): Promise<Entity[]> {
     return this.http.get(`${environment.apiURL}/entity/`).toPromise().then(
       response => {
-        let data = response.json();
-        return data.map(d => {return new Entity(d);});
+        const data = response.json();
+        return data.map(d => new Entity(d));
       }
     );
   }
@@ -24,7 +24,7 @@ export class EntityService {
       headers: new Headers({'Content-Type': 'application/json'}),
     }).toPromise().then(
       response => {
-        let data = response.json();
+        const data = response.json();
         return new Entity(data);
       }
     );
