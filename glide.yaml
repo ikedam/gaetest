@@ -1,4 +1,4 @@
-package: github.com/ikedam/gaeapp
+package: github.com/ikedam/gaetest
 import:
 - package: github.com/labstack/echo
   # Should be < v3.2.0 as 3.2.0 works only with go >= 1.7
