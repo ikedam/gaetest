@@ -58,6 +58,7 @@ RUN rm /var/lib/apt/lists/*_*
 RUN mkdir /go
 ENV GOPATH /go
 ENV PATH ${PATH}:/usr/local/go_appengine:/usr/local/nodejs/bin:${GOPATH}/bin
+ENV CHROME_BIN /usr/bin/chromium-browser
 
 ADD test.go .
 

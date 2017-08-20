@@ -40,6 +40,45 @@ func shutdownServer(cmd *exec.Cmd) bool {
 	return true
 }
 
+func pushd(dir string) func() {
+	orig, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		panic(err)
+	}
+	return func() {
+		if err := os.Chdir(orig); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func runYarn() int {
+	popd := pushd("client")
+	defer popd()
+	return runCommand("yarn")
+}
+
+func runAngularUnitTest(isDocker bool) int {
+	popd := pushd("client")
+	defer popd()
+
+	args := []string {
+		"run",
+		"test",
+		"--",
+		"--single-run",
+		"true",
+	}
+	if isDocker {
+		args = append(args, "--config", "karma-docker.conf.js")
+	}
+
+	return runCommand("yarn", args...)
+}
+
 func runE2ETest(isDocker bool) int {
 	serverStdout, err := os.OpenFile(
 		"server.stdout.log",
@@ -105,13 +144,8 @@ func runE2ETest(isDocker bool) int {
 		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 
-	if err := os.Chdir("client"); err != nil {
-		panic(err)
-	}
-
-	if ret := runCommand("yarn"); ret != 0 {
-		return ret
-	}
+	popd := pushd("client")
+	defer popd()
 
 	e2eArgs := []string {
 		"run",
@@ -142,6 +176,12 @@ func main() {
 		os.Exit(ret)
 	}
 	if ret := runCommand("goapp", "test", "./server", "./testutil"); ret != 0 {
+		os.Exit(ret)
+	}
+	if ret := runYarn(); ret != 0 {
+		os.Exit(ret)
+	}
+	if ret := runAngularUnitTest(*isDocker); ret != 0 {
 		os.Exit(ret)
 	}
 	if ret := runE2ETest(*isDocker); ret != 0 {
