@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -39,7 +40,7 @@ func shutdownServer(cmd *exec.Cmd) bool {
 	return true
 }
 
-func runE2ETest() int {
+func runE2ETest(isDocker bool) int {
 	serverStdout, err := os.OpenFile(
 		"server.stdout.log",
 		os.O_RDWR|os.O_CREATE|os.O_APPEND,
@@ -112,19 +113,26 @@ func runE2ETest() int {
 		return ret
 	}
 
-	return runCommand(
-		"yarn",
+	e2eArgs := []string {
 		"run",
 		"e2e",
-		"--",
+		"--", 
 		"--serve",
 		"true",
 		"--port",
 		"4200",
-	)
+	}
+	if isDocker {
+		e2eArgs = append(e2eArgs, "--config", "protractor-docker.conf.js")
+	}
+
+	return runCommand("yarn", e2eArgs...)
 }
 
 func main() {
+	isDocker := flag.Bool("docker", false, "Specify when running in docker")
+	flag.Parse()
+
 	gopath := os.Getenv("GOPATH")
 	projectDir := path.Join(gopath, "src", "github.com", "ikedam", "gaetest")
 	if err := os.Chdir(projectDir); err != nil {
@@ -136,7 +144,7 @@ func main() {
 	if ret := runCommand("goapp", "test", "./server", "./testutil"); ret != 0 {
 		os.Exit(ret)
 	}
-	if ret := runE2ETest(); ret != 0 {
+	if ret := runE2ETest(*isDocker); ret != 0 {
 		os.Exit(ret)
 	}
 	os.Exit(0)
