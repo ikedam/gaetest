@@ -60,6 +60,6 @@ ENV GOPATH /go
 ENV PATH ${PATH}:/usr/local/go_appengine:/usr/local/nodejs/bin:${GOPATH}/bin
 ENV CHROME_BIN /usr/bin/chromium-browser
 
-ADD test.go .
+ADD . /go/src/github.com/ikedam/gaetest
 
-CMD ["go", "run", "test.go", "--docker"]
+CMD ["go", "run", "/go/src/github.com/ikedam/gaetest/tool/test.go", "--docker"]

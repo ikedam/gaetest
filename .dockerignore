@@ -1,3 +1,4 @@
 .git
 vendor
 client/node_modules
+*.log
