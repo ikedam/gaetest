@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -176,6 +177,117 @@ func TestEntity(t *testing.T) {
 	}
 }
 
+func TestManyEntity(t *testing.T) {
+	inst := testutil.GetAppengineInstance()
+	ctx := testutil.GetAppengineContextFor(inst)
+
+	// Entity を空にする
+	if keyList, err := datastore.NewQuery("Entity").KeysOnly().GetAll(ctx, nil); err != nil {
+		panic(err)
+	} else {
+		if err := datastore.DeleteMulti(ctx, keyList); err != nil {
+			panic(err)
+		}
+	}
+
+	// 100 件のデータを昇順に登録
+	keys := []*datastore.Key{}
+	entities := []Entity{}
+	for i := 0; i < 100; i++ {
+		key := datastore.NewIncompleteKey(ctx, "Entity", nil)
+		entity := Entity{
+			Name:      fmt.Sprintf("test%d", i),
+			CreatedAt: time.Now().AddDate(-1, 0, 0).Add(time.Duration(i) * time.Second),
+		}
+		keys = append(keys, key)
+		entities = append(entities, entity)
+	}
+	if _, err := datastore.PutMulti(ctx, keys, entities); err != nil {
+		panic(err)
+	}
+
+	testutil.FlushGoonCache(ctx)
+
+	// 降順にデータが返る
+	if res, err := callHandlerEntityListGet(t, inst); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusOK {
+			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		resdata := res.Body.Bytes()
+		var result []Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			if len(result) != 100 {
+				t.Errorf("Expect 100 records, but was %v", result)
+			} else {
+				for idx, r := range result {
+					expect := fmt.Sprintf("test%d", (99 - idx))
+					if r.Name != expect {
+						t.Errorf("Expect %v, but was %v", expect, r.Name)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Entity を空にする
+	if keyList, err := datastore.NewQuery("Entity").KeysOnly().GetAll(ctx, nil); err != nil {
+		panic(err)
+	} else {
+		if err := datastore.DeleteMulti(ctx, keyList); err != nil {
+			panic(err)
+		}
+	}
+
+	// 100 件のデータを降順に登録
+	keys = []*datastore.Key{}
+	entities = []Entity{}
+	for i := 0; i < 100; i++ {
+		key := datastore.NewIncompleteKey(ctx, "Entity", nil)
+		entity := Entity{
+			Name:      fmt.Sprintf("test%d", i),
+			CreatedAt: time.Now().Add(-time.Duration(i) * time.Second),
+		}
+		keys = append(keys, key)
+		entities = append(entities, entity)
+	}
+	if _, err := datastore.PutMulti(ctx, keys, entities); err != nil {
+		panic(err)
+	}
+
+	testutil.FlushGoonCache(ctx)
+
+	// 降順にデータが返る
+	if res, err := callHandlerEntityListGet(t, inst); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusOK {
+			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		resdata := res.Body.Bytes()
+		var result []Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			if len(result) != 100 {
+				t.Errorf("Expect 100 records, but was %v", result)
+			} else {
+				for idx, r := range result {
+					expect := fmt.Sprintf("test%d", idx)
+					if r.Name != expect {
+						t.Errorf("Expect %v, but was %v", expect, r.Name)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestEntityHandlerEntityListGetDatastoreError(t *testing.T) {
 	inst := testutil.GetAppengineInstance()
 	mocker := testutil.NewAppengineMock()
@@ -296,7 +408,6 @@ func TestEntityHandlerEntityPostMemcacheError(t *testing.T) {
 		}
 	}
 }
-
 
 func TestEntityHandlerEntityPostBadRequestError(t *testing.T) {
 	inst := testutil.GetAppengineInstance()
