@@ -227,6 +227,7 @@ func runE2ETest(option testOption) int {
 	}
 	args := []string {
 		devAppServer,
+		"--require_indexes=true",
 		"--enable_watching_go_path=false",
 		"--clear_datastore=true",
 		"--datastore_consistency_policy=consistent",
