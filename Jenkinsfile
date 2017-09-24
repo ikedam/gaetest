@@ -1,6 +1,7 @@
 node {
 
-	def cacheVolumeName = "${env.JOB_NAME}-${env.EXECUTOR_NUMBER}".replaceAll("/", "-");
+	//def cacheVolumeName = "${env.JOB_NAME}-${env.EXECUTOR_NUMBER}".replaceAll("/", "-");
+	def cacheVolumeName = "gaetest-cache-${env.EXECUTOR_NUMBER}";
 
 	stage("prepare") {
 		checkout scm
