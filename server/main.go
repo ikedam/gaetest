@@ -33,4 +33,5 @@ func init() {
 func setupEntityHandlers(g *echo.Group) {
 	g.GET("/", handlerEntityListGet)
 	g.POST("/", handlerEntityPost)
+	g.PUT("/:id", handlerEntityPut)
 }

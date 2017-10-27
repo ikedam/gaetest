@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,28 @@ func callHandlerEntityPostRaw(t *testing.T, inst aetest.Instance, data []byte) (
 	res := httptest.NewRecorder()
 
 	return res, handlerEntityPost(e.NewContext(req, res))
+}
+
+func callHandlerEntityPut(t *testing.T, inst aetest.Instance, id int64, reqdata interface{}) (*httptest.ResponseRecorder, error) {
+	var data []byte
+	var err error
+	if data, err = json.Marshal(reqdata); err != nil {
+		t.Fatalf("Failt to request PUT /entity/%d: %v", id, err)
+	}
+
+	req, err := inst.NewRequest("PUT", fmt.Sprintf("/entity/%d", id), bytes.NewReader(data))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	e := echo.New()
+	res := httptest.NewRecorder()
+	c := e.NewContext(req, res)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(id, 10))
+
+	return res, handlerEntityPut(c)
 }
 
 func TestEntity(t *testing.T) {
@@ -139,6 +162,7 @@ func TestEntity(t *testing.T) {
 	}
 
 	// データの投入
+	var id2 int64
 	if res, err := callHandlerEntityPost(t, inst, &struct {
 		Name string `json:"name"`
 	}{
@@ -148,6 +172,13 @@ func TestEntity(t *testing.T) {
 	} else {
 		if res.Code != http.StatusOK {
 			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		resdata := res.Body.Bytes()
+		var result Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			id2 = result.ID
 		}
 	}
 
@@ -168,6 +199,56 @@ func TestEntity(t *testing.T) {
 			} else {
 				if result[0].Name != "Testdata2" {
 					t.Errorf("Expect Testdata2, but was %v", result[0].Name)
+				}
+				if result[1].Name != "Testdata1" {
+					t.Errorf("Expect Testdata1, but was %v", result[1].Name)
+				}
+			}
+		}
+	}
+
+	// データの更新
+	if res, err := callHandlerEntityPut(t, inst, id2, &struct {
+		Name string `json:"name"`
+	}{
+		Name: "Testdata2.1",
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusOK {
+			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		resdata := res.Body.Bytes()
+		var result Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			if result.ID != id2 {
+				t.Errorf("Expect %v, but was %v", id2, result.ID)
+			}
+			if result.Name != "Testdata2.1" {
+				t.Errorf("Expect Testdata2.1, but was %v", result.Name)
+			}
+		}
+	}
+
+	// 投入の逆順にデータが返る
+	if res, err := callHandlerEntityListGet(t, inst); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else {
+		if res.Code != http.StatusOK {
+			t.Errorf("Expected 200, but %v", res.Code)
+		}
+		resdata := res.Body.Bytes()
+		var result []Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			if len(result) != 2 {
+				t.Errorf("Expect 2 records, but was %v", result)
+			} else {
+				if result[0].Name != "Testdata2.1" {
+					t.Errorf("Expect Testdata2.1, but was %v", result[0].Name)
 				}
 				if result[1].Name != "Testdata1" {
 					t.Errorf("Expect Testdata1, but was %v", result[1].Name)
@@ -417,6 +498,101 @@ func TestEntityHandlerEntityPostBadRequestError(t *testing.T) {
 	} else {
 		if res.Code != http.StatusBadRequest {
 			t.Errorf("Expected 400, but %v", res.Code)
+		}
+	}
+}
+
+func TestEntityPutBadParameters(t *testing.T) {
+	// Entity を空にする
+	inst := testutil.GetAppengineInstance()
+	ctx := testutil.GetAppengineContextFor(inst)
+
+	if keyList, err := datastore.NewQuery("Entity").KeysOnly().GetAll(ctx, nil); err != nil {
+		panic(err)
+	} else {
+		if err := datastore.DeleteMulti(ctx, keyList); err != nil {
+			panic(err)
+		}
+	}
+	testutil.FlushGoonCache(ctx)
+
+	// データの投入
+	var id int64
+	if res, err := callHandlerEntityPost(t, inst, &struct {
+		Name string `json:"name"`
+	}{
+		Name: "Testdata1",
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else if res.Code != http.StatusOK {
+		t.Fatalf("Expected 200, but %v", res.Code)
+	} else {
+		resdata := res.Body.Bytes()
+		var result Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Fatalf("Failed to parse: %v", resdata)
+		}
+		id = result.ID
+	}
+
+	if res, err := callHandlerEntityListGet(t, inst); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else if res.Code != http.StatusOK {
+		t.Fatalf("Expected 200, but %v", res.Code)
+	} else {
+		resdata := res.Body.Bytes()
+		var result []Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Fatalf("Failed to parse: %v", resdata)
+		}
+		if len(result) != 1 {
+			t.Fatalf("Expect 1 records, but was %v", result)
+		}
+		if result[0].Name != "Testdata1" {
+			t.Errorf("Expect Testdata1, but was %v", result[0].Name)
+		}
+	}
+
+	// データの更新
+	if res, err := callHandlerEntityPut(t, inst, id, &struct {
+		ID        int64     `json:"id"`
+		Name      string    `json:"name"`
+		CreatedAt time.Time `json:"createdAt"`
+	}{
+		ID:        id + 1,
+		Name:      "Testdata1.1",
+		CreatedAt: time.Now().AddDate(1, 0, 0),
+	}); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else if res.Code != http.StatusOK {
+		t.Fatalf("Expected 200, but %v", res.Code)
+	} else {
+		resdata := res.Body.Bytes()
+		var result Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Errorf("Failed to parse: %v", resdata)
+		} else {
+			if result.Name != "Testdata1.1" {
+				t.Errorf("Expect Testdata1.1, but was %v", result.Name)
+			}
+		}
+	}
+
+	if res, err := callHandlerEntityListGet(t, inst); err != nil {
+		t.Fatalf("Expected no error but %v", err)
+	} else if res.Code != http.StatusOK {
+		t.Fatalf("Expected 200, but %v", res.Code)
+	} else {
+		resdata := res.Body.Bytes()
+		var result []Entity
+		if err := json.Unmarshal(resdata, &result); err != nil {
+			t.Fatalf("Failed to parse: %v", resdata)
+		}
+		if len(result) != 1 {
+			t.Fatalf("Expect 1 records, but was %v", result)
+		}
+		if result[0].Name != "Testdata1.1" {
+			t.Errorf("Expect Testdata1.1, but was %v", result[0].Name)
 		}
 	}
 }
