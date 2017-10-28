@@ -148,7 +148,12 @@ func (c *ExcludingCopier) copyStruct(dst, src reflect.Value) error {
 	}
 FIELDS:
 	for idx := 0; idx < src.NumField(); idx++ {
-		tagValues := sType.Field(idx).Tag.Get(tagName)
+		field := sType.Field(idx)
+		if field.PkgPath != "" {
+			// unexported field. skip.
+			continue
+		}
+		tagValues := field.Tag.Get(tagName)
 		if tagValues != "" {
 			for _, tagValue := range strings.Split(tagValues, ",") {
 				if c.ToExclude == tagValue {
@@ -303,5 +308,5 @@ func (c *ExcludingCopier) createDest(src reflect.Value) reflect.Value {
 	case reflect.Ptr:
 		return reflect.New(src.Type().Elem())
 	}
-	return reflect.Zero(src.Type())
+	return reflect.New(src.Type()).Elem()
 }
