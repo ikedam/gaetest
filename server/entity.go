@@ -85,13 +85,8 @@ func handlerEntityPut(c echo.Context) error {
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 
-		var entityTemp Entity
-		if err := c.Bind(&entityTemp); err != nil {
+		if err := ProtectingBind(c.Bind, &entity, "update"); err != nil {
 			log.Warningf(ctx, "Invalid request: %v", err)
-			return c.String(http.StatusBadRequest, err.Error())
-		}
-		if err := ExcludingCopy(&entity, &entityTemp, "update"); err != nil {
-			log.Errorf(ctx, "Failed to copy: %v", err)
 			return c.String(http.StatusBadRequest, err.Error())
 		}
 

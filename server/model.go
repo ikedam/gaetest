@@ -6,7 +6,7 @@ import (
 
 // Entity は適当なモデルです。
 type Entity struct {
-	ID        int64     `json:"id" datastore:"-" goon:"id" excludingcopy:"update"`
+	ID        int64     `json:"id" datastore:"-" goon:"id" protectfor:"update"`
 	Name      string    `json:"name" datastore:",noindex"`
-	CreatedAt time.Time `json:"createdAt" excludingcopy:"update"`
+	CreatedAt time.Time `json:"createdAt" protectfor:"update"`
 }

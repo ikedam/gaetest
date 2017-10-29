@@ -7,21 +7,43 @@ import (
 )
 
 const (
-	// ExcludingCopyDefaultStructTag is the default tag name to test excluding to copy
-	ExcludingCopyDefaultStructTag = "excludingcopy"
+	// ProtectingCopyDefaultStructTag is the default tag name to test fields not to copy
+	ProtectingCopyDefaultStructTag = "protectfor"
 )
 
-// ExcludingCopy performs deepcopy excluding fields with the tag
-// whose key is "excludingcopy" and value is specified with `toExclude`.
+// ProtectingCopy performs deepcopy excluding fields with the tag
+// whose key is "protectfor" and value is specified with `protectFor`.
 // dst and src must suffice one of followings:
 // * src and dst are non-nil pointers of the same type.
 // * src and dst are the non-nil map.
 // * src and dst are the non-nil slice with the same length.
-func ExcludingCopy(dst, src interface{}, toExclude string) error {
-	c := &ExcludingCopier{
-		ToExclude: toExclude,
+func ProtectingCopy(dst, src interface{}, protectFor string) error {
+	c := &ProtectingCopier{
+		ProtectFor: protectFor,
 	}
 	return c.Copy(dst, src)
+}
+
+// ProtectingBind wraps binging functions such as echo.Context.Bind(),
+// providing field protection.
+func ProtectingBind(binder func(dst interface{}) error, dst interface{}, protectFor string) error {
+	var temp interface{}
+	dValue := reflect.ValueOf(dst)
+	sValue := reflect.ValueOf(&temp).Elem()
+	switch dValue.Kind() {
+	case reflect.Slice:
+		sValue.Set(reflect.MakeSlice(dValue.Type(), dValue.Len(), dValue.Cap()))
+	case reflect.Map:
+		sValue.Set(reflect.MakeMap(dValue.Type()))
+	case reflect.Ptr:
+		sValue.Set(reflect.New(dValue.Type().Elem()))
+	default:
+		sValue.Set(reflect.New(dValue.Type()).Elem())
+	}
+	if err := binder(temp); err != nil {
+		return err
+	}
+	return ProtectingCopy(dst, temp, protectFor)
 }
 
 // ErrCopyTypeMismatch represents an error caused for
@@ -52,21 +74,21 @@ func (e *ErrCopyValueInvalid) Error() string {
 	return e.msg
 }
 
-// ExcludingCopier is the configuration to perform excluding copy
-type ExcludingCopier struct {
-	// StructTag is the tag name to test fields to exclude to copy.
-	// If not specified, ExcludingCopyDefaultStructTag is used.
+// ProtectingCopier is the configuration to perform protecting copy
+type ProtectingCopier struct {
+	// StructTag is the tag name to test fields not to copy.
+	// If not specified, ProtectingCopyDefaultStructTag is used.
 	StructTag string
-	// ToExclude is the tag value to test fields to exclude to copy
-	ToExclude string
+	// ProtectFor is the tag value to test fields not to copy
+	ProtectFor string
 }
 
-// Copy performs deepcopy excluding fields specified with tag.
+// Copy performs deepcopy protecting fields specified with tag.
 // dst and src must suffice one of followings:
 // * src and dst are non-nil pointers of the same type.
 // * src and dst are the non-nil map.
 // * src and dst are the non-nil slice with the same length.
-func (c *ExcludingCopier) Copy(dst, src interface{}) error {
+func (c *ProtectingCopier) Copy(dst, src interface{}) error {
 	dValue := reflect.ValueOf(dst)
 	sValue := reflect.ValueOf(src)
 	dType := dValue.Type()
@@ -109,10 +131,10 @@ func (c *ExcludingCopier) Copy(dst, src interface{}) error {
 	}
 }
 
-// copyImpl is a sub function of ExcludingCopier.Copy
+// copyImpl is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * CanSet()
-func (c *ExcludingCopier) copyImpl(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copyImpl(dst, src reflect.Value) error {
 	if dst.Type() != src.Type() {
 		// This occurs when the type is interface{}
 		dst.Set(reflect.Zero(src.Type()))
@@ -135,16 +157,16 @@ func (c *ExcludingCopier) copyImpl(dst, src reflect.Value) error {
 	return nil
 }
 
-// copyStruct is a sub function of ExcludingCopier.Copy
+// copyStruct is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Struct
 // * CanSet()
 // * types are same
-func (c *ExcludingCopier) copyStruct(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copyStruct(dst, src reflect.Value) error {
 	sType := src.Type()
 	tagName := c.StructTag
 	if tagName == "" {
-		tagName = ExcludingCopyDefaultStructTag
+		tagName = ProtectingCopyDefaultStructTag
 	}
 FIELDS:
 	for idx := 0; idx < src.NumField(); idx++ {
@@ -156,7 +178,7 @@ FIELDS:
 		tagValues := field.Tag.Get(tagName)
 		if tagValues != "" {
 			for _, tagValue := range strings.Split(tagValues, ",") {
-				if c.ToExclude == tagValue {
+				if c.ProtectFor == tagValue {
 					continue FIELDS
 				}
 			}
@@ -170,12 +192,12 @@ FIELDS:
 	return nil
 }
 
-// copyPtr is a sub function of ExcludingCopier.Copy
+// copyPtr is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Ptr
 // * CanSet()
 // * types are same
-func (c *ExcludingCopier) copyPtr(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copyPtr(dst, src reflect.Value) error {
 	if src.IsNil() {
 		dst.Set(reflect.Zero(dst.Type()))
 		return nil
@@ -190,12 +212,12 @@ func (c *ExcludingCopier) copyPtr(dst, src reflect.Value) error {
 	return c.copyImpl(dst.Elem(), src.Elem())
 }
 
-// copySlice is a sub function of ExcludingCopier.Copy
+// copySlice is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Slice
 // * CanSet()
 // * types are same
-func (c *ExcludingCopier) copySlice(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copySlice(dst, src reflect.Value) error {
 	if src.IsNil() {
 		dst.Set(reflect.Zero(dst.Type()))
 		return nil
@@ -209,13 +231,13 @@ func (c *ExcludingCopier) copySlice(dst, src reflect.Value) error {
 	return c.copySliceOrArrayImpl(dst, src)
 }
 
-// copySliceOrArrayImpl is a sub function of ExcludingCopier.Copy
+// copySliceOrArrayImpl is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Slice or reflect.Array
 // * IsValid()
 // * have the same length
 // * types are same
-func (c *ExcludingCopier) copySliceOrArrayImpl(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copySliceOrArrayImpl(dst, src reflect.Value) error {
 	for idx := 0; idx < src.Len(); idx++ {
 		sValue := src.Index(idx)
 		dValue := dst.Index(idx)
@@ -227,12 +249,12 @@ func (c *ExcludingCopier) copySliceOrArrayImpl(dst, src reflect.Value) error {
 	return nil
 }
 
-// copyMap is a sub function of ExcludingCopier.Copy
+// copyMap is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Map
 // * CanSet()
 // * types are same
-func (c *ExcludingCopier) copyMap(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copyMap(dst, src reflect.Value) error {
 	if src.IsNil() {
 		dst.Set(reflect.Zero(dst.Type()))
 		return nil
@@ -244,11 +266,11 @@ func (c *ExcludingCopier) copyMap(dst, src reflect.Value) error {
 	return c.copyMapImpl(dst, src)
 }
 
-// copyMapImpl is a sub function of ExcludingCopier.Copy
+// copyMapImpl is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Map
 // * types are same
-func (c *ExcludingCopier) copyMapImpl(dst, src reflect.Value) error {
+func (c *ProtectingCopier) copyMapImpl(dst, src reflect.Value) error {
 	// Remove unnecessary Keys
 	for _, key := range dst.MapKeys() {
 		if src.MapIndex(key).IsValid() {
@@ -278,7 +300,7 @@ func (c *ExcludingCopier) copyMapImpl(dst, src reflect.Value) error {
 }
 
 // canSet tests whether copying src to dest affects the caller.
-func (c *ExcludingCopier) canSet(dst, src reflect.Value) bool {
+func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
 	if !src.IsValid() || !dst.IsValid() {
 		return false
 	}
@@ -297,8 +319,8 @@ func (c *ExcludingCopier) canSet(dst, src reflect.Value) bool {
 	return false
 }
 
-// createDest creates a new object to perform excludingCopy
-func (c *ExcludingCopier) createDest(src reflect.Value) reflect.Value {
+// createDest creates a new object to perform protecting copy
+func (c *ProtectingCopier) createDest(src reflect.Value) reflect.Value {
 	switch src.Kind() {
 	case reflect.Slice:
 		return reflect.MakeSlice(src.Type(), src.Len(), src.Len())

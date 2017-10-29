@@ -45,13 +45,13 @@ func assertNotSame(t *testing.T, expected, actual interface{}) {
 	}
 }
 
-func TestExcludingCopyStructTag(t *testing.T) {
+func TestProtectingCopyStructTag(t *testing.T) {
 	type testStruct struct {
-		Field1 int `excludingcopy:"cond1"`
-		Field2 int `excludingcopy:"cond2"`
-		Field3 int `excludingcopy:"cond1,cond2"`
+		Field1 int `protectfor:"cond1"`
+		Field2 int `protectfor:"cond2"`
+		Field3 int `protectfor:"cond1,cond2"`
 		Field4 int `anothertag:"cond1"`
-		Field5 int `excludingcopy:"cond11"`
+		Field5 int `protectfor:"cond11"`
 		Field6 int
 		field7 int
 	}
@@ -87,12 +87,12 @@ func TestExcludingCopyStructTag(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, "cond1"),
+		ProtectingCopy(&dst, &src, "cond1"),
 	)
 	assertEquals(t, expected, dst)
 }
 
-func TestExcludingCopyStructSimpleTypes(t *testing.T) {
+func TestProtectingCopyStructSimpleTypes(t *testing.T) {
 	type testStruct struct {
 		Field1 int
 		Field2 int64
@@ -110,12 +110,12 @@ func TestExcludingCopyStructSimpleTypes(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructTypeDef(t *testing.T) {
+func TestProtectingCopyStructTypeDef(t *testing.T) {
 	type mytype string
 	type testStruct struct {
 		Field1 mytype
@@ -128,12 +128,12 @@ func TestExcludingCopyStructTypeDef(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructArray(t *testing.T) {
+func TestProtectingCopyStructArray(t *testing.T) {
 	type testStruct struct {
 		Field1 [2]int
 	}
@@ -145,12 +145,12 @@ func TestExcludingCopyStructArray(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructSlice(t *testing.T) {
+func TestProtectingCopyStructSlice(t *testing.T) {
 	type testStruct struct {
 		Field1 []int
 	}
@@ -162,12 +162,12 @@ func TestExcludingCopyStructSlice(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructMap(t *testing.T) {
+func TestProtectingCopyStructMap(t *testing.T) {
 	type testStruct struct {
 		Field1 map[string]int
 	}
@@ -179,12 +179,12 @@ func TestExcludingCopyStructMap(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructInterface(t *testing.T) {
+func TestProtectingCopyStructInterface(t *testing.T) {
 	type testStruct struct {
 		Field1 interface{}
 	}
@@ -197,12 +197,12 @@ func TestExcludingCopyStructInterface(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructStruct(t *testing.T) {
+func TestProtectingCopyStructStruct(t *testing.T) {
 	type nestStruct struct {
 		Value int
 	}
@@ -217,12 +217,12 @@ func TestExcludingCopyStructStruct(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructAnonymousStruct(t *testing.T) {
+func TestProtectingCopyStructAnonymousStruct(t *testing.T) {
 	type testStruct struct {
 		Field1 struct{Value int}
 	}
@@ -234,12 +234,12 @@ func TestExcludingCopyStructAnonymousStruct(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 }
 
-func TestExcludingCopyStructPointerToSimple(t *testing.T) {
+func TestProtectingCopyStructPointerToSimple(t *testing.T) {
 	type testStruct struct {
 		Field1 *int
 	}
@@ -252,13 +252,13 @@ func TestExcludingCopyStructPointerToSimple(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 	assertNotSame(t, src.Field1, dst.Field1)
 }
 
-func TestExcludingCopyStructPointerToSimpleOverwrite(t *testing.T) {
+func TestProtectingCopyStructPointerToSimpleOverwrite(t *testing.T) {
 	type testStruct struct {
 		Field1 *int
 	}
@@ -274,13 +274,13 @@ func TestExcludingCopyStructPointerToSimpleOverwrite(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 	assertSame(t, &v1, dst.Field1)
 }
 
-func TestExcludingCopyStructPointerToStruct(t *testing.T) {
+func TestProtectingCopyStructPointerToStruct(t *testing.T) {
 	type nestStruct struct {
 		Value int
 	}
@@ -298,13 +298,13 @@ func TestExcludingCopyStructPointerToStruct(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 	assertNotSame(t, src.Field1, dst.Field1)
 }
 
-func TestExcludingCopyStructPointerToStructOverwrite(t *testing.T) {
+func TestProtectingCopyStructPointerToStructOverwrite(t *testing.T) {
 	type nestStruct struct {
 		Value int
 	}
@@ -327,7 +327,7 @@ func TestExcludingCopyStructPointerToStructOverwrite(t *testing.T) {
 	assertEquals(
 		t,
 		nil,
-		ExcludingCopy(&dst, &src, ""),
+		ProtectingCopy(&dst, &src, ""),
 	)
 	assertEquals(t, src, dst)
 	assertSame(t, &v1, dst.Field1)
