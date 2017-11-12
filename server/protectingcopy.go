@@ -29,16 +29,17 @@ func ProtectingCopy(dst, src interface{}, protectFor string) error {
 func ProtectingBind(binder func(dst interface{}) error, dst interface{}, protectFor string) error {
 	var temp interface{}
 	dValue := reflect.ValueOf(dst)
+	dType := reflect.TypeOf(dst)
 	sValue := reflect.ValueOf(&temp).Elem()
-	switch dValue.Kind() {
+	switch dType.Kind() {
 	case reflect.Slice:
-		sValue.Set(reflect.MakeSlice(dValue.Type(), dValue.Len(), dValue.Cap()))
+		sValue.Set(reflect.MakeSlice(dType, dValue.Len(), dValue.Cap()))
 	case reflect.Map:
-		sValue.Set(reflect.MakeMap(dValue.Type()))
+		sValue.Set(reflect.MakeMap(dType))
 	case reflect.Ptr:
-		sValue.Set(reflect.New(dValue.Type().Elem()))
+		sValue.Set(reflect.New(dType.Elem()))
 	default:
-		sValue.Set(reflect.New(dValue.Type()).Elem())
+		sValue.Set(reflect.New(dType).Elem())
 	}
 	if err := binder(temp); err != nil {
 		return err
@@ -91,8 +92,8 @@ type ProtectingCopier struct {
 func (c *ProtectingCopier) Copy(dst, src interface{}) error {
 	dValue := reflect.ValueOf(dst)
 	sValue := reflect.ValueOf(src)
-	dType := dValue.Type()
-	sType := sValue.Type()
+	dType := reflect.TypeOf(dst)
+	sType := reflect.TypeOf(src)
 
 	if !dValue.IsValid() {
 		// dst == nil
@@ -134,18 +135,17 @@ func (c *ProtectingCopier) Copy(dst, src interface{}) error {
 // copyImpl is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * CanSet()
+// * Same static types
 func (c *ProtectingCopier) copyImpl(dst, src reflect.Value) error {
-	if dst.Type() != src.Type() {
-		// This occurs when the type is interface{}
-		dst.Set(reflect.Zero(src.Type()))
-	}
 	switch src.Kind() {
+	case reflect.Interface:
+		return c.copyInterface(dst, src)
 	case reflect.Struct:
 		return c.copyStruct(dst, src)
 	case reflect.Slice:
 		return c.copySlice(dst, src)
 	case reflect.Array:
-		return c.copySliceOrArrayImpl(dst, src)
+		return c.copyArray(dst, src)
 	case reflect.Map:
 		return c.copyMap(dst, src)
 	case reflect.Ptr:
@@ -157,19 +157,58 @@ func (c *ProtectingCopier) copyImpl(dst, src reflect.Value) error {
 	return nil
 }
 
+// copyInterface is a sub function of ProtectingCopier.Copy
+// This assumes values are:
+// * reflect.Interface
+// * CanSet()
+func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
+	if src.IsNil() {
+		dst.Set(src)
+		return nil
+	}
+	sType := reflect.TypeOf(src.Interface())
+	dType := reflect.TypeOf(dst.Interface())
+	switch sType.Kind() {
+	case reflect.Slice:
+		if src.Elem().IsNil() {
+			dst.Set(src)
+			return nil
+		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() || dst.Elem().Len() != src.Elem().Len() {
+			dst.Set(c.createDest(src.Elem()))
+		}
+		return c.copyImpl(dst.Elem(), src.Elem())
+	case reflect.Map, reflect.Ptr:
+		if src.Elem().IsNil() {
+			dst.Set(src)
+			return nil
+		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() {
+			dst.Set(c.createDest(src.Elem()))
+		}
+		return c.copyImpl(dst.Elem(), src.Elem())
+	}
+
+	// non-pointer types in interface are unmodifiable
+	d := c.createDest(src.Elem())
+	if err := c.copyImpl(d, src.Elem()); err != nil {
+		return err
+	}
+	dst.Set(d)
+	return nil
+}
+
 // copyStruct is a sub function of ProtectingCopier.Copy
 // This assumes values are:
 // * reflect.Struct
 // * CanSet()
 // * types are same
 func (c *ProtectingCopier) copyStruct(dst, src reflect.Value) error {
-	sType := src.Type()
+	sType := reflect.TypeOf(src.Interface())
 	tagName := c.StructTag
 	if tagName == "" {
 		tagName = ProtectingCopyDefaultStructTag
 	}
 FIELDS:
-	for idx := 0; idx < src.NumField(); idx++ {
+	for idx := 0; idx < sType.NumField(); idx++ {
 		field := sType.Field(idx)
 		if field.PkgPath != "" {
 			// unexported field. skip.
@@ -199,15 +238,11 @@ FIELDS:
 // * types are same
 func (c *ProtectingCopier) copyPtr(dst, src reflect.Value) error {
 	if src.IsNil() {
-		dst.Set(reflect.Zero(dst.Type()))
+		dst.Set(src)
 		return nil
 	}
 	if dst.IsNil() {
-		dst.Set(reflect.New(src.Type().Elem()))
-	} else if dst.Type().Elem() != src.Type().Elem() {
-		// This occurs when the type is *interface{}
-		// branches to ensure that the test covers this path.
-		dst.Set(reflect.New(src.Type().Elem()))
+		dst.Set(reflect.New(reflect.TypeOf(src.Interface()).Elem()))
 	}
 	return c.copyImpl(dst.Elem(), src.Elem())
 }
@@ -219,15 +254,30 @@ func (c *ProtectingCopier) copyPtr(dst, src reflect.Value) error {
 // * types are same
 func (c *ProtectingCopier) copySlice(dst, src reflect.Value) error {
 	if src.IsNil() {
-		dst.Set(reflect.Zero(dst.Type()))
+		dst.Set(src)
 		return nil
 	}
-	if dst.IsNil() || dst.Cap() < src.Len() {
-		dst.Set(reflect.MakeSlice(src.Type(), src.Len(), src.Len()))
-	} else if src.Len() != dst.Len() {
-		dst.SetLen(src.Len())
+
+	// if dst.Cap() < src.Len() {
+	// 	dst.Set(c.createDest(src))
+	// } else if src.Len() != dst.Len() {
+	// 	dst.SetLen(src.Len())
+	// }
+
+	// Safer way.
+	if dst.Len() != src.Len() {
+		dst.Set(c.createDest(src))
 	}
 
+	return c.copySliceOrArrayImpl(dst, src)
+}
+
+// copySlice is a sub function of ProtectingCopier.Copy
+// This assumes values are:
+// * reflect.Array
+// * CanSet()
+// * types are same
+func (c *ProtectingCopier) copyArray(dst, src reflect.Value) error {
 	return c.copySliceOrArrayImpl(dst, src)
 }
 
@@ -256,12 +306,12 @@ func (c *ProtectingCopier) copySliceOrArrayImpl(dst, src reflect.Value) error {
 // * types are same
 func (c *ProtectingCopier) copyMap(dst, src reflect.Value) error {
 	if src.IsNil() {
-		dst.Set(reflect.Zero(dst.Type()))
+		dst.Set(src)
 		return nil
 	}
 	if dst.IsNil() {
-		// dst.Set(reflect.MakeMapWithSize(src.Type(), src.Len()))
-		dst.Set(reflect.MakeMap(src.Type()))
+		// dst.Set(reflect.MakeMapWithSize(reflect.TypeOf(src.Interface()), src.Len()))
+		dst.Set(reflect.MakeMap(reflect.TypeOf(src.Interface())))
 	}
 	return c.copyMapImpl(dst, src)
 }
@@ -305,12 +355,15 @@ func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
 		return false
 	}
 
-	if src.Type() != dst.Type() {
+	dType := reflect.TypeOf(dst.Interface())
+	sType := reflect.TypeOf(src.Interface())
+
+	if sType != dType {
 		// this occurs when type is interface{}
 		return false
 	}
 
-	switch dst.Kind() {
+	switch dType.Kind() {
 	case reflect.Ptr, reflect.Map:
 		return true
 	case reflect.Slice:
@@ -321,14 +374,16 @@ func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
 
 // createDest creates a new object to perform protecting copy
 func (c *ProtectingCopier) createDest(src reflect.Value) reflect.Value {
-	switch src.Kind() {
+	sType := reflect.TypeOf(src.Interface())
+
+	switch sType.Kind() {
 	case reflect.Slice:
-		return reflect.MakeSlice(src.Type(), src.Len(), src.Len())
+		return reflect.MakeSlice(sType, src.Len(), src.Len())
 	case reflect.Map:
-		// return reflect.MakeMapWithSize(src.Type(), src.Len())
-		return reflect.MakeMap(src.Type())
+		// return reflect.MakeMapWithSize(sType, src.Len())
+		return reflect.MakeMap(sType)
 	case reflect.Ptr:
-		return reflect.New(src.Type().Elem())
+		return reflect.New(sType.Elem())
 	}
-	return reflect.New(src.Type()).Elem()
+	return reflect.New(sType).Elem()
 }
