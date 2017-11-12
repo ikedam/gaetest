@@ -11,6 +11,17 @@ const (
 	ProtectingCopyDefaultStructTag = "protectfor"
 )
 
+// ErrCopyValueInvalid represents a failure of copy
+// caused for the source or the destination is invalid
+// (e.g. is nil)
+type ErrCopyValueInvalid struct {
+	msg string
+}
+
+func (e *ErrCopyValueInvalid) Error() string {
+	return e.msg
+}
+
 // ProtectingCopy performs deepcopy excluding fields with the tag
 // whose key is "protectfor" and value is specified with `protectFor`.
 // dst and src must suffice one of followings:
@@ -27,24 +38,17 @@ func ProtectingCopy(dst, src interface{}, protectFor string) error {
 // ProtectingBind wraps binging functions such as echo.Context.Bind(),
 // providing field protection.
 func ProtectingBind(binder func(dst interface{}) error, dst interface{}, protectFor string) error {
-	var temp interface{}
-	dValue := reflect.ValueOf(dst)
 	dType := reflect.TypeOf(dst)
-	sValue := reflect.ValueOf(&temp).Elem()
-	switch dType.Kind() {
-	case reflect.Slice:
-		sValue.Set(reflect.MakeSlice(dType, dValue.Len(), dValue.Cap()))
-	case reflect.Map:
-		sValue.Set(reflect.MakeMap(dType))
-	case reflect.Ptr:
-		sValue.Set(reflect.New(dType.Elem()))
-	default:
-		sValue.Set(reflect.New(dType).Elem())
+	if dType.Kind() != reflect.Ptr {
+		return &ErrCopyValueInvalid{
+			msg: "dst must be a pointer",
+		}
 	}
-	if err := binder(temp); err != nil {
+	sValue := reflect.New(dType.Elem())
+	if err := binder(sValue.Interface()); err != nil {
 		return err
 	}
-	return ProtectingCopy(dst, temp, protectFor)
+	return ProtectingCopy(dst, sValue.Interface(), protectFor)
 }
 
 // ErrCopyTypeMismatch represents an error caused for
@@ -62,17 +66,6 @@ func NewErrCopyTypeMismatch(dType, sType reflect.Type) *ErrCopyTypeMismatch {
 	return &ErrCopyTypeMismatch{
 		msg: fmt.Sprintf("types of the destination and the source differ: %v vs %v", dType, sType),
 	}
-}
-
-// ErrCopyValueInvalid represents a failure of copy
-// caused for the source or the destination is invalid
-// (e.g. is nil)
-type ErrCopyValueInvalid struct {
-	msg string
-}
-
-func (e *ErrCopyValueInvalid) Error() string {
-	return e.msg
 }
 
 // ProtectingCopier is the configuration to perform protecting copy
@@ -124,7 +117,7 @@ func (c *ProtectingCopier) Copy(dst, src interface{}) error {
 				msg: "lengths of src and dst must be the same",
 			}
 		}
-		return c.copySliceOrArrayImpl(dValue.Elem(), sValue.Elem())
+		return c.copySliceOrArrayImpl(dValue, sValue)
 	}
 
 	return &ErrCopyValueInvalid{
@@ -369,7 +362,7 @@ func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
 	case reflect.Slice:
 		return src.Len() == dst.Len()
 	}
-	return false
+	return dst.CanSet()
 }
 
 // createDest creates a new object to perform protecting copy

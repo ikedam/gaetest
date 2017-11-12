@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -1040,4 +1042,197 @@ func TestProtectingCopyStructPointerToSliceReplaceShirink(t *testing.T) {
 	)
 	expectEquals(t, src, dst)
 	expectSliceNotInSameAddr(t, v1orig, v1)
+}
+
+func TestProtectingCopyStructPointerToMap(t *testing.T) {
+	type testStruct struct {
+		Field1 *map[string]int
+	}
+
+	dst := testStruct{}
+	v := map[string]int{"key1": 1, "key2": 2, "key3": 3, }
+	src := testStruct{
+		Field1: &v,
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+	expectNotSame(t, src.Field1, dst.Field1)
+	expectNotSame(t, *src.Field1, *dst.Field1)
+}
+
+func TestProtectingCopyStructPointerToMapOverwrite(t *testing.T) {
+	type testStruct struct {
+		Field1 *map[string]int
+	}
+
+	v1 := map[string]int{"key1": 1, "key2": 102, "key4": 4, }
+	v1orig := v1
+	v2 := map[string]int{"key1": 1, "key2": 2, "key3": 3, }
+	dst := testStruct{
+		Field1: &v1,
+	}
+	src := testStruct{
+		Field1: &v2,
+	}
+	expectSame(t, v1orig, v1)
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+	expectSame(t, v1orig, v1)
+}
+
+
+type exampleUser struct {
+	Name string `json:"name"`
+	Password string `json:"password" protectfor:"update"`
+}
+
+func TestProtectingBindStruct(t* testing.T) {
+	binder := func(dst interface{}) error {
+		return json.Unmarshal(
+			[]byte(
+				`{` +
+					`"name": "newname",` +
+					`"password": "sesame"` +
+					`}`,
+			),
+			dst,
+		);
+	}
+	user := exampleUser{
+		Name: "oldname",
+		Password: "secret",
+	}
+	if err := ProtectingBind(binder, &user, "update"); err != nil {
+		t.Fatalf("Expect no err, but: %v", err)
+	}
+	expectEquals(
+		t,
+		exampleUser{
+			Name: "newname",
+			Password: "secret",
+		},
+		user,
+	)
+}
+
+func TestProtectingBindSlice(t* testing.T) {
+	binder := func(dst interface{}) error {
+		return json.Unmarshal(
+			[]byte(
+				`[{` +
+					`"name": "newname1",` +
+					`"password": "sesame1"` +
+					`},` +
+					`{` +
+					`"name": "newname2",` +
+					`"password": "sesame2"` +
+					`}]`,
+			),
+			dst,
+		);
+	}
+	users := []exampleUser{}
+	if err := ProtectingBind(binder, &users, "update"); err != nil {
+		t.Fatalf("Expect no err, but: %v", err)
+	}
+	expectEquals(
+		t,
+		[]exampleUser {
+			exampleUser{
+				Name: "newname1",
+				Password: "",
+			},
+			exampleUser{
+				Name: "newname2",
+				Password: "",
+			},
+		},
+		users,
+	)
+}
+
+func TestProtectingBindMap(t* testing.T) {
+	binder := func(dst interface{}) error {
+		return json.Unmarshal(
+			[]byte(
+				`{` +
+					`"user1": {` +
+					`  "name": "newname1",` +
+					`  "password": "sesame1"` +
+					`},` +
+					`"user2": {` +
+					`  "name": "newname2",` +
+					`  "password": "sesame2"` +
+					`}}`,
+			),
+			dst,
+		);
+	}
+	users := map[string]*exampleUser{
+			"user1": &exampleUser{
+				Name: "oldname1",
+				Password: "password1",
+			},
+			"user2": &exampleUser{
+				Name: "oldname2",
+				Password: "password2",
+			},
+			"user3": &exampleUser{
+				Name: "oldname3",
+				Password: "password3",
+			},
+	}
+	if err := ProtectingBind(binder, &users, "update"); err != nil {
+		t.Fatalf("Expect no err, but: %v", err)
+	}
+	expectEquals(
+		t,
+		map[string]*exampleUser {
+			"user1": &exampleUser{
+				Name: "newname1",
+				Password: "password1",
+			},
+			"user2": &exampleUser{
+				Name: "newname2",
+				Password: "password2",
+			},
+		},
+		users,
+	)
+}
+
+func TestProtectingBindNonPtr(t* testing.T) {
+	binder := func(dst interface{}) error {
+		return nil
+	}
+	users := []exampleUser{}
+	if err := ProtectingBind(binder, users, "update"); err == nil {
+		t.Fatalf("Expect err, but nil: %v", err)
+	} else if _, ok := err.(*ErrCopyValueInvalid); !ok {
+		t.Fatalf("Expect ErrCopyValueInvalid, but was: %#v", err)
+	}
+}
+
+func TestProtectingBindError(t* testing.T) {
+	expectErr := errors.New("Some error")
+	binder := func(dst interface{}) error {
+		return expectErr
+	}
+	var user exampleUser
+	err := ProtectingBind(binder, &user, "update")
+	expectSame(t, expectErr, err)
+}
+
+func TestProtectingErrCopyValueInvalid(t* testing.T) {
+	msg := "test message"
+	err := &ErrCopyValueInvalid{msg: msg}
+	expectEquals(t, msg, err.Error())
 }
