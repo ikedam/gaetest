@@ -167,7 +167,12 @@ func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
 			dst.Set(src)
 			return nil
 		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() || dst.Elem().Len() != src.Elem().Len() {
-			dst.Set(c.createDest(src.Elem()))
+			if _dst, err := c.createCopiedDest(src.Elem()); err == nil {
+				dst.Set(_dst)
+				return nil
+			} else {
+				return err
+			}
 		}
 		return c.copyImpl(dst.Elem(), src.Elem())
 	case reflect.Map, reflect.Ptr:
@@ -175,17 +180,22 @@ func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
 			dst.Set(src)
 			return nil
 		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() {
-			dst.Set(c.createDest(src.Elem()))
+			if _dst, err := c.createCopiedDest(src.Elem()); err == nil {
+				dst.Set(_dst)
+				return nil
+			} else {
+				return err
+			}
 		}
 		return c.copyImpl(dst.Elem(), src.Elem())
 	}
 
 	// non-pointer types in interface are unmodifiable
-	d := c.createDest(src.Elem())
-	if err := c.copyImpl(d, src.Elem()); err != nil {
+	if _dst, err := c.createCopiedDest(src.Elem()); err == nil {
+		dst.Set(_dst)
+	} else {
 		return err
 	}
-	dst.Set(d)
 	return nil
 }
 
@@ -252,14 +262,24 @@ func (c *ProtectingCopier) copySlice(dst, src reflect.Value) error {
 	}
 
 	// if dst.Cap() < src.Len() {
-	// 	dst.Set(c.createDest(src))
+	// 	if _dst, err := c.createCopiedDest(src); err == nil {
+	// 		dst.Set(_dst)
+	// 		return nil
+	// 	} else {
+	// 		return err
+	// 	}
 	// } else if src.Len() != dst.Len() {
 	// 	dst.SetLen(src.Len())
 	// }
 
 	// Safer way.
 	if dst.Len() != src.Len() {
-		dst.Set(c.createDest(src))
+		if _dst, err := c.createCopiedDest(src); err == nil {
+			dst.Set(_dst)
+			return nil
+		} else {
+			return err
+		}
 	}
 
 	return c.copySliceOrArrayImpl(dst, src)
@@ -326,24 +346,24 @@ func (c *ProtectingCopier) copyMapImpl(dst, src reflect.Value) error {
 		sValue := src.MapIndex(key)
 		dValue := dst.MapIndex(key)
 
-		if c.canSet(dValue, sValue) {
+		if c.canSetForMap(dValue, sValue) {
 			// pointer type, slice, map, and so on.
 			if err := c.copyImpl(dValue, sValue); err != nil {
 				return err
 			}
 		} else {
-			dValue = c.createDest(sValue)
-			if err := c.copyImpl(dValue, sValue); err != nil {
+			if _dValue, err := c.createCopiedDest(sValue); err == nil {
+				dst.SetMapIndex(key, _dValue)
+			} else {
 				return err
 			}
-			dst.SetMapIndex(key, dValue)
 		}
 	}
 	return nil
 }
 
-// canSet tests whether copying src to dest affects the caller.
-func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
+// canSetForMap tests whether copying src to dst affects the caller.
+func (c *ProtectingCopier) canSetForMap(dst, src reflect.Value) bool {
 	if !src.IsValid() || !dst.IsValid() {
 		return false
 	}
@@ -358,25 +378,59 @@ func (c *ProtectingCopier) canSet(dst, src reflect.Value) bool {
 
 	switch dType.Kind() {
 	case reflect.Ptr, reflect.Map:
-		return true
+		for src.Kind() == reflect.Interface && src.IsValid() {
+			src = src.Elem()
+		}
+		for dst.Kind() == reflect.Interface && dst.IsValid() {
+			dst = dst.Elem()
+		}
+		return src.IsValid() && !src.IsNil() && dst.IsValid() && !dst.IsNil()
 	case reflect.Slice:
-		return src.Len() == dst.Len()
+		for src.Kind() == reflect.Interface && src.IsValid() {
+			src = src.Elem()
+		}
+		for dst.Kind() == reflect.Interface && dst.IsValid() {
+			dst = dst.Elem()
+		}
+		return src.IsValid() && !src.IsNil() && dst.IsValid() && !dst.IsNil() && src.Len() == dst.Len()
 	}
 	return dst.CanSet()
 }
 
-// createDest creates a new object to perform protecting copy
-func (c *ProtectingCopier) createDest(src reflect.Value) reflect.Value {
-	sType := reflect.TypeOf(src.Interface())
-
-	switch sType.Kind() {
-	case reflect.Slice:
-		return reflect.MakeSlice(sType, src.Len(), src.Len())
-	case reflect.Map:
-		// return reflect.MakeMapWithSize(sType, src.Len())
-		return reflect.MakeMap(sType)
-	case reflect.Ptr:
-		return reflect.New(sType.Elem())
+// createCopiedDest creates a new object and perform protecting copy
+func (c *ProtectingCopier) createCopiedDest(src reflect.Value) (reflect.Value, error) {
+	origSrc := src
+	for src.Kind() == reflect.Interface && src.IsValid() {
+		src = src.Elem()
 	}
-	return reflect.New(sType).Elem()
+	if !src.IsValid() {
+		return origSrc, nil
+	}
+	switch src.Kind() {
+	case reflect.Slice:
+		if src.IsNil() {
+			return origSrc, nil
+		}
+		dst := reflect.MakeSlice(src.Type(), src.Len(), src.Len())
+		err := c.copyImpl(dst, src)
+		return dst, err
+	case reflect.Map:
+		if src.IsNil() {
+			return origSrc, nil
+		}
+		// dst := reflect.MakeMapWithSize(src.Type(), src.Len())
+		dst := reflect.MakeMap(src.Type())
+		err := c.copyImpl(dst, src)
+		return dst, err
+	case reflect.Ptr:
+		if src.IsNil() {
+			return origSrc, nil
+		}
+		dst := reflect.New(src.Type().Elem())
+		err := c.copyImpl(dst, src)
+		return dst, err
+	}
+	dst :=reflect.New(src.Type()).Elem()
+	err := c.copyImpl(dst, src)
+	return dst, err
 }

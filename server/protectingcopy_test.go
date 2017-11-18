@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -463,6 +464,79 @@ func TestProtectingCopyStructMapOverwrite(t *testing.T) {
 	expectSame(t, v1, dst.Field1)
 }
 
+func TestProtectingCopyStructMapInterface(t *testing.T) {
+	type testStruct struct {
+		Field1 map[string]interface{}
+	}
+
+	v1 := 1
+	v2 := 2
+	v3 := 3
+	v4 := "src"
+	v5 := []int{1, 2, 3}
+	v6 := []int{1, 2, 3}
+	v7 := map[string]int{"key1": 1}
+	var typedNil *int
+	var sliceNil []int
+	var mapNil map[string]int
+	dstMap := map[string]interface{}{
+		"sameType": 2,
+		"sameTypePointer": &v1,
+		"differentType": "string",
+		"differentTypePointer": &v3,
+		"sliceWithSameLength": v5,
+		"sliceWithDifferentLength": v6,
+		"map": v7,
+		"toNil": nil,
+		"toTypedNil": typedNil,
+		"toSliceNil": sliceNil,
+		"toMapNil": mapNil,
+		"fromNil": 1,
+		"fromTypedNil": 1,
+		"fromSliceNil": []int{1, 2, 3},
+		"fromMapNil": map[string]int{"key1": 1},
+	}
+	dst := testStruct{
+		Field1: dstMap,
+	}
+	src := testStruct{
+		Field1: map[string]interface{}{
+			"sameType": 1,
+			"sameTypePointer": &v2,
+			"differentType": 3,
+			"differentTypePointer": &v4,
+			"sliceWithSameLength": []int{4, 5, 6},
+			"sliceWithDifferentLength": []int{4, 5},
+			"map": map[string]int{"key2": 2},
+			"toNil": &v2,
+			"toTypedNil": &v2,
+			"toSliceNil": []int{1, 2, 3},
+			"toMapNil": map[string]int{"key1": 1},
+			"fromNil": nil,
+			"fromTypedNil": typedNil,
+			"fromSliceNil": sliceNil,
+			"fromMapNil": mapNil,
+		},
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+	expectNotSame(t, src.Field1, dst.Field1)
+	expectSame(t, dstMap, dst.Field1)
+	expectEquals(t, v1, v2)
+	expectNotSame(t, src.Field1["sameTypePointer"], dst.Field1["sameTypePointer"])
+	expectNotSame(t, src.Field1["differentTypePointer"], dst.Field1["differentTypePointer"])
+	expectNotSame(t, src.Field1["sliceWithSameLength"], dst.Field1["sliceWithSameLength"])
+	expectSame(t, v5, dst.Field1["sliceWithSameLength"])
+	expectNotSame(t, src.Field1["sliceWithDifferentLength"], dst.Field1["sliceWithDifferentLength"])
+	expectNotSame(t, v6, dst.Field1["sliceWithDifferentLength"])
+	expectNotSame(t, src.Field1["map"], dst.Field1["map"])
+	expectSame(t, v7, dst.Field1["map"])
+}
+
 func TestProtectingCopyStructInterfaceSimple(t *testing.T) {
 	type testStruct struct {
 		Field1 interface{}
@@ -846,6 +920,70 @@ func TestProtectingCopyStructInterfacePtrReplace(t *testing.T) {
 	expectNotSame(t, &v1, dst.Field1)
 }
 
+func TestProtectingCopyStructInterfaceNil(t *testing.T) {
+	type testStruct struct {
+		Field1 interface{}
+	}
+
+	v1 := 1
+	dst := testStruct{
+		Field1: &v1,
+	}
+	src := testStruct{
+		Field1: nil,
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+}
+
+func TestProtectingCopyStructInterfaceTypedNil(t *testing.T) {
+	type testStruct struct {
+		Field1 interface{}
+	}
+
+	var nilValue *string
+
+	v1 := 1
+	dst := testStruct{
+		Field1: &v1,
+	}
+	src := testStruct{
+		Field1: nilValue,
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+}
+
+func TestProtectingCopyStructInterfaceNilMap(t *testing.T) {
+	type testStruct struct {
+		Field1 interface{}
+	}
+
+	var nilValue map[string]int
+
+	v1 := 1
+	dst := testStruct{
+		Field1: &v1,
+	}
+	src := testStruct{
+		Field1: nilValue,
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+}
+
 func TestProtectingCopyStructStruct(t *testing.T) {
 	type nestStruct struct {
 		Value int
@@ -1088,6 +1226,116 @@ func TestProtectingCopyStructPointerToMapOverwrite(t *testing.T) {
 	expectSame(t, v1orig, v1)
 }
 
+func TestProtectingCopyStructPointerNil(t *testing.T) {
+	type testStruct struct {
+		Field1 *int
+	}
+
+	v1 := 1
+	dst := testStruct{
+		Field1: &v1,
+	}
+	src := testStruct{
+		Field1: nil,
+	}
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(&dst, &src, ""),
+	)
+	expectEquals(t, src, dst)
+}
+
+func TestProtectingCopyMap(t *testing.T) {
+	src := map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}
+	dst := map[string]string{"key1": "value1", "key2": "value22", "key4": "value4"}
+	dstOrig := dst
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(dst, src, ""),
+	)
+	expectEquals(t, src, dst)
+	expectSame(t, dstOrig, dst)
+}
+
+func TestProtectingCopySlice(t *testing.T) {
+	src := []int{1, 2, 3}
+	dst := make([]int, 3)
+	dstOrig := dst
+	expectEquals(
+		t,
+		nil,
+		ProtectingCopy(dst, src, ""),
+	)
+	expectEquals(t, src, dst)
+	expectSame(t, dstOrig, dst)
+}
+
+func TestProtectingCopyToNil(t *testing.T) {
+	src := "src"
+	err := ProtectingCopy(nil, &src, "")
+	if err == nil {
+		t.Fatalf("Expects err, but not")
+	}
+	if _, ok := err.(*ErrCopyValueInvalid); !ok {
+		t.Fatalf("Expects ErrCopyValueInvalid, but was %#v", err)
+	}
+}
+
+func TestProtectingCopyFromNil(t *testing.T) {
+	var dst string
+	err := ProtectingCopy(&dst, nil, "")
+	if err == nil {
+		t.Fatalf("Expects err, but not")
+	}
+	if _, ok := err.(*ErrCopyValueInvalid); !ok {
+		t.Fatalf("Expects ErrCopyValueInvalid, but was %#v", err)
+	}
+}
+
+func TestProtectingCopyTypeMismatch(t *testing.T) {
+	dst := "dst"
+	src := 1
+	err := ProtectingCopy(&dst, &src, "")
+	if err == nil {
+		t.Fatalf("Expects err, but not")
+	}
+	if _, ok := err.(*ErrCopyTypeMismatch); !ok {
+		t.Fatalf("Expects ErrCopyTypeMismatch, but was %#v", err)
+	}
+	errStr := err.Error()
+	if !strings.Contains(errStr, "string") {
+		t.Errorf("Expects containing 'string', but not: %v", errStr)
+	}
+	if !strings.Contains(errStr, "int") {
+		t.Errorf("Expects containing 'int', but not: %v", errStr)
+	}
+}
+
+func TestProtectingCopyLengthMismatch(t *testing.T) {
+	src := []int{1, 2, 3}
+	dst := make([]int, 0, 3)
+	err := ProtectingCopy(dst, src, "")
+	if err == nil {
+		t.Fatalf("Expects err, but not")
+	}
+	if _, ok := err.(*ErrCopyValueInvalid); !ok {
+		t.Fatalf("Expects ErrCopyValueInvalid, but was %#v", err)
+	}
+}
+
+func TestProtectingUnsupportedType(t *testing.T) {
+	src := 1
+	dst := 2
+	err := ProtectingCopy(dst, src, "")
+	if err == nil {
+		t.Fatalf("Expects err, but not")
+	}
+	if _, ok := err.(*ErrCopyValueInvalid); !ok {
+		t.Fatalf("Expects ErrCopyValueInvalid, but was %#v", err)
+	}
+}
 
 type exampleUser struct {
 	Name string `json:"name"`
