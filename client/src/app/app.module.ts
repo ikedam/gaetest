@@ -11,6 +11,7 @@ import { EntityComponent } from './entity/entity.component';
 import { EntityListComponent } from './entity/entity-list.component';
 import { EntityNewComponent } from './entity/entity-new.component';
 import { EntityService } from './entity/entity.service';
+import { ScrollComponent } from './scroll/scroll.component';
 import { TopComponent } from './top/top.component';
 
 @NgModule({
@@ -19,6 +20,7 @@ import { TopComponent } from './top/top.component';
     EntityComponent,
     EntityListComponent,
     EntityNewComponent,
+    ScrollComponent,
     TopComponent,
   ],
   imports: [

@@ -1,0 +1,24 @@
+<div class="container-fluid">
+<h1>Scroll</h1>
+<div class="row">
+  <button class="btn btn-primary" (click)="generatePoints()" role="button">Geneate</button>
+</div>
+<div class="row">
+アクティブ: {{activePoint}}
+<div class="scroller">
+<table class="table">
+  <thead>
+    <tr>
+      <th>ポイント</th>
+      <th>日付</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr #pointListEntry *ngFor="let point of pointList" [class.active-point]="point.point === activePoint" [class.table-danger]="point.point === activePoint">
+      <td class="entity-name">{{point.point}}</td>
+      <td class="entity-created-at">{{point.createdAt}}</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</div>

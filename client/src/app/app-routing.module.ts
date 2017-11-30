@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { EntityComponent } from './entity/entity.component';
 import { EntityListComponent } from './entity/entity-list.component';
 import { EntityNewComponent } from './entity/entity-new.component';
+import { ScrollComponent } from './scroll/scroll.component';
 import { TopComponent } from './top/top.component';
 
 @NgModule({
@@ -17,6 +18,7 @@ import { TopComponent } from './top/top.component';
         ],
       },
       { path: 'entity', component: EntityComponent },
+      { path: 'scroll', component: ScrollComponent },
       { path: '', component: TopComponent },
     ]),
   ],
