@@ -66,7 +66,7 @@ export class ScrollComponent implements AfterViewInit, OnDestroy {
     // 真ん中に表示したいので、以下の補正を行う
     // + scroller の高さ / 2
     // - セルの高さ / 2
-    let scrollTarget = activeTop - (scroller.clientHeight / 2) + (activeRect.height / 2);
+    let scrollTarget = activeTop - (scroller.clientHeight / 2) + ((activeRect.bottom - activeRect.top) / 2);
 
     scroller.scrollTop = scrollTarget;
   }
