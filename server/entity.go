@@ -85,10 +85,14 @@ func handlerEntityPut(c echo.Context) error {
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 
+		log.Errorf(ctx, "entity (pre)=%+v", entity)
+
 		if err := ProtectingBind(c.Bind, &entity, "update"); err != nil {
 			log.Warningf(ctx, "Invalid request: %v", err)
 			return c.String(http.StatusBadRequest, err.Error())
 		}
+
+		log.Errorf(ctx, "entity (after)=%+v", entity)
 
 		if _, err := g.Put(&entity); err != nil {
 			log.Errorf(ctx, "Failed to put Entity: %v", err)

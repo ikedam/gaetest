@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import * as moment from 'moment';
 
 import { Entity } from './entity';
 import { EntityService } from './entity.service';
@@ -11,7 +12,8 @@ import { EntityService } from './entity.service';
 })
 export class EntityNewComponent implements OnInit {
   formDef = {
-    name: ['', Validators.required, ],
+    name: ['', [Validators.required, ], ],
+    scheduledDate: ['', [Validators.required, EntityNewComponent.validateDateAfterNow, ], ],
   };
 
   form: FormGroup;
@@ -24,6 +26,28 @@ export class EntityNewComponent implements OnInit {
     private activatedRoute: ActivatedRoute,
     private entityService: EntityService,
   ) {
+  }
+
+  static validateDateAfterNow(control: AbstractControl): {[key: string]: any} {
+    return EntityNewComponent.validateDateAfterNowForValue(control.value);
+  }
+
+  static validateDateAfterNowForValue(value: string): {[key: string]: any} {
+    const m = moment(value);
+    if (!m.isValid()) {
+      // invalid value
+      return null;
+    }
+    const inputDate = m.toDate();
+    const now = new Date();
+    if (inputDate.getTime() < now.getTime()) {
+      return {
+        'dateAfterNow': {
+          'value': value,
+        },
+      };
+    }
+    return null;
   }
 
   ngOnInit() {

@@ -3,6 +3,7 @@ import * as moment from 'moment';
 export class Entity {
   id: number;
   name: string;
+  scheduledDate: Date;
   createdAt: Date;
 
   constructor(json: {[key: string]: any} = null) {
@@ -15,6 +16,13 @@ export class Entity {
           this.createdAt = json['createdAt'];
         } else {
           this.createdAt = moment(json['createdAt']).toDate();
+        }
+      }
+      if (json['scheduledDate']) {
+        if (json['scheduledDate'] instanceof Date) {
+          this.scheduledDate = json['scheduledDate'];
+        } else {
+          this.scheduledDate = moment(json['scheduledDate']).toDate();
         }
       }
     }

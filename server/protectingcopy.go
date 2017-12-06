@@ -4,11 +4,24 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 )
 
 const (
 	// ProtectingCopyDefaultStructTag is the default tag name to test fields not to copy
 	ProtectingCopyDefaultStructTag = "protectfor"
+)
+
+var (
+	// IsNonStruct decides to treat the value is non-struct,
+	// like time.Time and so on.
+	IsNonStruct = func(v interface{}) bool {
+		switch v.(type) {
+		case time.Time:
+			return true
+		}
+		return false
+	}
 )
 
 // ErrCopyValueInvalid represents a failure of copy
@@ -169,10 +182,10 @@ func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
 		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() || dst.Elem().Len() != src.Elem().Len() {
 			if _dst, err := c.createCopiedDest(src.Elem()); err == nil {
 				dst.Set(_dst)
-				return nil
 			} else {
 				return err
 			}
+			return nil
 		}
 		return c.copyImpl(dst.Elem(), src.Elem())
 	case reflect.Map, reflect.Ptr:
@@ -182,10 +195,10 @@ func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
 		} else if dType != sType || dst.IsNil() || dst.Elem().IsNil() {
 			if _dst, err := c.createCopiedDest(src.Elem()); err == nil {
 				dst.Set(_dst)
-				return nil
 			} else {
 				return err
 			}
+			return nil
 		}
 		return c.copyImpl(dst.Elem(), src.Elem())
 	}
@@ -205,6 +218,11 @@ func (c *ProtectingCopier) copyInterface(dst, src reflect.Value) error {
 // * CanSet()
 // * types are same
 func (c *ProtectingCopier) copyStruct(dst, src reflect.Value) error {
+	// special cases
+	if IsNonStruct(src.Interface()) {
+		dst.Set(src)
+		return nil
+	}
 	sType := reflect.TypeOf(src.Interface())
 	tagName := c.StructTag
 	if tagName == "" {
@@ -276,10 +294,10 @@ func (c *ProtectingCopier) copySlice(dst, src reflect.Value) error {
 	if dst.Len() != src.Len() {
 		if _dst, err := c.createCopiedDest(src); err == nil {
 			dst.Set(_dst)
-			return nil
 		} else {
 			return err
 		}
+		return nil
 	}
 
 	return c.copySliceOrArrayImpl(dst, src)
@@ -430,7 +448,7 @@ func (c *ProtectingCopier) createCopiedDest(src reflect.Value) (reflect.Value, e
 		err := c.copyImpl(dst, src)
 		return dst, err
 	}
-	dst :=reflect.New(src.Type()).Elem()
+	dst := reflect.New(src.Type()).Elem()
 	err := c.copyImpl(dst, src)
 	return dst, err
 }

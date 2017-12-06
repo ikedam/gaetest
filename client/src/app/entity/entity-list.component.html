@@ -4,12 +4,14 @@
   <thead>
     <tr>
       <th>名前</th>
+      <th>日程</th>
       <th>作成日時</th>
     </tr>
   </thead>
   <tbody>
     <tr *ngFor="let entity of entityList">
       <td class="entity-name">{{entity.name}}</td>
+      <td class="entity-schedule-date">{{entity.scheduledDate}}</td>
       <td class="entity-created-at">{{entity.createdAt}}</td>
     </tr>
   </tbody>

@@ -110,9 +110,11 @@ func TestEntity(t *testing.T) {
 
 	// データの投入
 	if res, err := callHandlerEntityPost(t, inst, &struct {
-		Name string `json:"name"`
+		Name          string `json:"name"`
+		ScheduledDate string `json: "scheduledDate"`
 	}{
-		Name: "Testdata1",
+		Name:          "Testdata1",
+		ScheduledDate: "2017-01-01T00:00:00Z",
 	}); err != nil {
 		t.Fatalf("Expected no error but %v", err)
 	} else {
@@ -126,6 +128,9 @@ func TestEntity(t *testing.T) {
 		} else {
 			if result.Name != "Testdata1" {
 				t.Errorf("Expect Testdata1, but was %v", result.Name)
+			}
+			if result.ScheduledDate != time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC) {
+				t.Errorf("Expect 2017-01-01, but was %v", result.ScheduledDate)
 			}
 			if result.ID == 0 {
 				t.Errorf("Expect non-0, but was %v", result.ID)
@@ -157,6 +162,9 @@ func TestEntity(t *testing.T) {
 				if result[0].Name != "Testdata1" {
 					t.Errorf("Expect Testdata1, but was %v", result[0].Name)
 				}
+				if result[0].ScheduledDate != time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC) {
+					t.Errorf("Expect 2017-01-01, but was %v", result[0].ScheduledDate)
+				}
 			}
 		}
 	}
@@ -164,9 +172,11 @@ func TestEntity(t *testing.T) {
 	// データの投入
 	var id2 int64
 	if res, err := callHandlerEntityPost(t, inst, &struct {
-		Name string `json:"name"`
+		Name          string `json:"name"`
+		ScheduledDate string `json: "scheduledDate"`
 	}{
-		Name: "Testdata2",
+		Name:          "Testdata2",
+		ScheduledDate: "2018-11-12T00:00:00Z",
 	}); err != nil {
 		t.Fatalf("Expected no error but %v", err)
 	} else {
@@ -179,6 +189,9 @@ func TestEntity(t *testing.T) {
 			t.Errorf("Failed to parse: %v", resdata)
 		} else {
 			id2 = result.ID
+			if result.ScheduledDate != time.Date(2018, 11, 12, 0, 0, 0, 0, time.UTC) {
+				t.Errorf("Expect 2018-11-12, but was %v", result.ScheduledDate)
+			}
 		}
 	}
 
@@ -209,9 +222,11 @@ func TestEntity(t *testing.T) {
 
 	// データの更新
 	if res, err := callHandlerEntityPut(t, inst, id2, &struct {
-		Name string `json:"name"`
+		Name          string `json:"name"`
+		ScheduledDate string `json: "scheduledDate"`
 	}{
-		Name: "Testdata2.1",
+		Name:          "Testdata2.1",
+		ScheduledDate: "2018-11-13T00:00:00Z",
 	}); err != nil {
 		t.Fatalf("Expected no error but %v", err)
 	} else {
@@ -250,8 +265,14 @@ func TestEntity(t *testing.T) {
 				if result[0].Name != "Testdata2.1" {
 					t.Errorf("Expect Testdata2.1, but was %v", result[0].Name)
 				}
+				if result[0].ScheduledDate != time.Date(2018, 11, 13, 0, 0, 0, 0, time.UTC) {
+					t.Errorf("Expect 2018-11-13, but was %v", result[0].ScheduledDate)
+				}
 				if result[1].Name != "Testdata1" {
 					t.Errorf("Expect Testdata1, but was %v", result[1].Name)
+				}
+				if result[1].ScheduledDate != time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC) {
+					t.Errorf("Expect 2017-1-1, but was %v", result[1].ScheduledDate)
 				}
 			}
 		}
@@ -516,12 +537,16 @@ func TestEntityPutBadParameters(t *testing.T) {
 	}
 	testutil.FlushGoonCache(ctx)
 
+	var createdAt time.Time
+
 	// データの投入
 	var id int64
 	if res, err := callHandlerEntityPost(t, inst, &struct {
-		Name string `json:"name"`
+		Name          string `json:"name"`
+		ScheduledDate string `json: "scheduledDate"`
 	}{
-		Name: "Testdata1",
+		Name:          "Testdata1",
+		ScheduledDate: "2017-01-01T00:00:00Z",
 	}); err != nil {
 		t.Fatalf("Expected no error but %v", err)
 	} else if res.Code != http.StatusOK {
@@ -533,6 +558,7 @@ func TestEntityPutBadParameters(t *testing.T) {
 			t.Fatalf("Failed to parse: %v", resdata)
 		}
 		id = result.ID
+		createdAt = result.CreatedAt
 	}
 
 	if res, err := callHandlerEntityListGet(t, inst); err != nil {
@@ -551,17 +577,25 @@ func TestEntityPutBadParameters(t *testing.T) {
 		if result[0].Name != "Testdata1" {
 			t.Errorf("Expect Testdata1, but was %v", result[0].Name)
 		}
+		if result[0].ScheduledDate != time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC) {
+			t.Errorf("Expect 2017-01-01, but was %v", result[0].ScheduledDate)
+		}
+		if result[0].CreatedAt != createdAt {
+			t.Errorf("Expect %v, but was %v", createdAt, result[0].CreatedAt)
+		}
 	}
 
 	// データの更新
 	if res, err := callHandlerEntityPut(t, inst, id, &struct {
-		ID        int64     `json:"id"`
-		Name      string    `json:"name"`
-		CreatedAt time.Time `json:"createdAt"`
+		ID            int64     `json:"id"`
+		Name          string    `json:"name"`
+		ScheduledDate string    `json: "scheduledDate"`
+		CreatedAt     time.Time `json:"createdAt"`
 	}{
-		ID:        id + 1,
-		Name:      "Testdata1.1",
-		CreatedAt: time.Now().AddDate(1, 0, 0),
+		ID:            id + 1,
+		Name:          "Testdata1.1",
+		ScheduledDate: "2018-02-03T00:00:00Z",
+		CreatedAt:     time.Now().AddDate(1, 0, 0),
 	}); err != nil {
 		t.Fatalf("Expected no error but %v", err)
 	} else if res.Code != http.StatusOK {
@@ -574,6 +608,13 @@ func TestEntityPutBadParameters(t *testing.T) {
 		} else {
 			if result.Name != "Testdata1.1" {
 				t.Errorf("Expect Testdata1.1, but was %v", result.Name)
+			}
+			if result.ScheduledDate != time.Date(2018, 2, 3, 0, 0, 0, 0, time.UTC) {
+				t.Errorf("Expect 2018-02-03, but was %v", result.ScheduledDate)
+			}
+			// Should not update
+			if result.CreatedAt != createdAt {
+				t.Errorf("Expect %v, but was %v", createdAt, result.CreatedAt)
 			}
 		}
 	}
@@ -593,6 +634,13 @@ func TestEntityPutBadParameters(t *testing.T) {
 		}
 		if result[0].Name != "Testdata1.1" {
 			t.Errorf("Expect Testdata1.1, but was %v", result[0].Name)
+		}
+		if result[0].ScheduledDate != time.Date(2018, 2, 3, 0, 0, 0, 0, time.UTC) {
+			t.Errorf("Expect 2018-02-03, but was %v", result[0].ScheduledDate)
+		}
+		// Should not update
+		if result[0].CreatedAt != createdAt {
+			t.Errorf("Expect %v, but was %v", createdAt, result[0].CreatedAt)
 		}
 	}
 }
