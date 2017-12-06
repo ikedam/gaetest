@@ -13,14 +13,13 @@ export class ScrollComponent implements AfterViewInit, OnDestroy {
   pointList: Array<Point> = [];
   activePoint = 0;
   activePosition = 0.0;
-  
 
   constructor(public elementRef: ElementRef) {
   }
 
   calculateActivePosition() {
-    let scroller: HTMLElement = this.elementRef.nativeElement.querySelector('.scroller');
-    let active = scroller.querySelector('.active-point');
+    const scroller: HTMLElement = this.elementRef.nativeElement.querySelector('.scroller');
+    const active = scroller.querySelector('.active-point');
     if (!active) {
       this.activePosition = 0;
     } else {
@@ -33,9 +32,9 @@ export class ScrollComponent implements AfterViewInit, OnDestroy {
     this.onPointListEntryChanged();
 
     // For next times
-    this.pointListEntryChangeSubscription = this.pointListEntry.changes.subscribe(
-      () => {this.onPointListEntryChanged()}
-    );
+    this.pointListEntryChangeSubscription = this.pointListEntry.changes.subscribe(() => {
+      this.onPointListEntryChanged();
+    });
   }
 
   ngOnDestroy() {
@@ -49,35 +48,35 @@ export class ScrollComponent implements AfterViewInit, OnDestroy {
     // 現在アクティブなセルにスクロールする
     // Angular 自体にはスクロールを制御する機能がないため、
     // DOM に直接アクセスして実現する。
-    let scroller: HTMLElement = this.elementRef.nativeElement.querySelector('.scroller');
-    let active = scroller.querySelector('.active-point');
+    const scroller: HTMLElement = this.elementRef.nativeElement.querySelector('.scroller');
+    const active = scroller.querySelector('.active-point');
     if (!active) {
       scroller.scrollTop = 0;
       return;
     }
 
-    let activeRect = active.getBoundingClientRect();
-    let scrollerRect = scroller.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
     // scroller 内でのアクティブセルの相対位置
     // アクティブセルのページ内位置 - scroller のページ内位置 + 現在のスクロール位置
-    let activeTop = activeRect.top - scrollerRect.top + scroller.scrollTop;
+    const activeTop = activeRect.top - scrollerRect.top + scroller.scrollTop;
 
     // activeTop にスクロールするとアクティブセルが一番上に来る状態にスクロールする。
     // 真ん中に表示したいので、以下の補正を行う
     // + scroller の高さ / 2
     // - セルの高さ / 2
-    let scrollTarget = activeTop - (scroller.clientHeight / 2) + ((activeRect.bottom - activeRect.top) / 2);
+    const scrollTarget = activeTop - (scroller.clientHeight / 2) + ((activeRect.bottom - activeRect.top) / 2);
 
     scroller.scrollTop = scrollTarget;
   }
 
   generatePoints() {
-    let newPointList: Array<Point> = [];
-    let size = 30;
-    let active = Math.floor(Math.random() * size) + 1;
-    let now = new Date();
+    const newPointList: Array<Point> = [];
+    const size = 30;
+    const active = Math.floor(Math.random() * size) + 1;
+    const now = new Date();
     for (let i = 0; i < size; ++i) {
-      let point = new Point();
+      const point = new Point();
       point.point = i + 1;
       if (i <= active) {
         point.createdAt = new Date(now.getTime() + (i * 24 * 60 * 60));
