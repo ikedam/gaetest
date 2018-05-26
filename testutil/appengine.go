@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/golang/protobuf/proto"
@@ -22,6 +26,9 @@ var (
 
 	// ErrNotSupported は操作がサポートされていない場合に返るエラーです。
 	ErrNotSupported = errors.New("Not supported in this environment")
+
+	// APIPort は dev_appserver の API Port です。
+	APIPort = 8090
 )
 
 func setupAppengine() {
@@ -32,6 +39,75 @@ func teardownAppengine() {
 	RefreshAppengineInstance()
 }
 
+func findDevAppserver() string {
+	if orig := os.Getenv("APPENGINE_DEV_APPSERVER"); orig != "" {
+		return orig
+	}
+
+	var path string
+	if _path, err := exec.LookPath("dev_appserver.py"); err == nil {
+		path = _path
+	} else {
+		panic(err)
+	}
+	return path
+}
+
+func findDevAppserverWrapper() string {
+	_, me, _, _ := runtime.Caller(0)
+	wrapper := filepath.Join(filepath.Dir(me), "dev_appserver_wrapper.py")
+	return wrapper
+}
+
+// saveEnv は指定の環境変数を復旧するためのクロージャを返します。
+// defer で呼び出してください。
+func saveEnv(envs ...string) func() {
+	envsToRestore := []string{}
+	savedEnvs := map[string]string{}
+	for _, env := range envs {
+		if val, ok := os.LookupEnv(env); ok {
+			envsToRestore = append(envsToRestore, env)
+			savedEnvs[env] = val
+		} else {
+			envsToRestore = append(envsToRestore, env)
+		}
+	}
+	return func() {
+		for _, env := range envsToRestore {
+			if val, ok := savedEnvs[env]; ok {
+				if err := os.Setenv(env, val); err != nil {
+					panic(err)
+				}
+			} else {
+				if err := os.Unsetenv(env); err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+}
+
+// NewInstance はテスト用に最適化したオプションで GAE のインスタンスを起動します。
+func NewInstance(opts *aetest.Options) (aetest.Instance, error) {
+	restoreEnv := saveEnv(
+		"APPENGINE_DEV_APPSERVER",
+		"APPENGINE_DEV_APPSERVER_BASE",
+		"DEV_APPSERVER_API_PORT",
+	)
+	defer restoreEnv()
+
+	if err := os.Setenv("APPENGINE_DEV_APPSERVER_BASE", findDevAppserver()); err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("APPENGINE_DEV_APPSERVER", findDevAppserverWrapper()); err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("DEV_APPSERVER_API_PORT", fmt.Sprintf("%v", APIPort)); err != nil {
+		panic(err)
+	}
+	return aetest.NewInstance(opts)
+}
+
 // GetAppengineInstance はテスト用の GAE のインスタンスを返します。
 // aetest.NewInstance と同じですが、インスタンスの使い回しをするので高速です。
 // 新規のインスタンスが必要な場合、事前に RefreshAppengineInstance を呼び出してください。
@@ -40,7 +116,7 @@ func GetAppengineInstance() aetest.Instance {
 		return inst
 	}
 	var err error
-	inst, err = aetest.NewInstance(&aetest.Options{
+	inst, err = NewInstance(&aetest.Options{
 		StronglyConsistentDatastore: true,
 	})
 	if err != nil {
