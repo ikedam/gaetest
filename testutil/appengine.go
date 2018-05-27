@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -149,6 +150,102 @@ func GetAppengineContextFor(inst aetest.Instance) context.Context {
 		panic(err)
 	}
 	return appengine.NewContext(req)
+}
+
+// DatastoreClear は Datastore を初期化します。
+func DatastoreClear() error {
+	url := fmt.Sprintf("http://localhost:%v/clear?stub=datastore_v3", APIPort)
+	var resp *http.Response
+	if _resp, err := http.Get(url); err != nil {
+		resp = _resp
+	} else {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("/clear returned bad status: %v", resp.StatusCode)
+	}
+	return nil
+}
+
+func findPython() string {
+	var path string
+	if _path, err := exec.LookPath("python"); err == nil {
+		path = _path
+	} else {
+		panic(err)
+	}
+	return path
+}
+
+func findAppcfg() string {
+	var path string
+	if _path, err := exec.LookPath("appcfg.py"); err == nil {
+		path = _path
+	} else {
+		panic(err)
+	}
+	return path
+}
+
+// DatastoreDump は Datastore をダンプします。
+func DatastoreDump(filename string, namespace string, kinds []string) error {
+	var tempDir string
+	if _tempDir, err := ioutil.TempDir("", "testutil"); err == nil {
+		tempDir = _tempDir
+	} else {
+		return err
+	}
+
+	defer os.RemoveAll(tempDir)
+
+	cmd := exec.Command(
+		findPython(),
+		findAppcfg(),
+		"download_data",
+		fmt.Sprintf("--url=http://localhost:%v/", APIPort),
+		fmt.Sprintf("--filename=%v", filename),
+		fmt.Sprintf("--namespace=%v", namespace),
+		fmt.Sprintf("--kind=(%v)", strings.Join(kinds, ",")),
+		fmt.Sprintf("--log_file=%v", filepath.Join(tempDir, "bulkloader.log")),
+		fmt.Sprintf("--db_filename=%v", filepath.Join(tempDir, "bulkloader-progress.sql3")),
+		fmt.Sprintf("--result_db_filename=%v", filepath.Join(tempDir, "bulkloader-results.sql3")),
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("Failed in download_data: %v output: %v", err, output)
+	}
+
+	return nil
+}
+
+// DatastoreRestore は Datastore をダンプから復旧します。
+func DatastoreRestore(filename string, namespace string) error {
+	var tempDir string
+	if _tempDir, err := ioutil.TempDir("", "testutil"); err == nil {
+		tempDir = _tempDir
+	} else {
+		return err
+	}
+
+	defer os.RemoveAll(tempDir)
+
+	cmd := exec.Command(
+		findPython(),
+		findAppcfg(),
+		"upload_data",
+		fmt.Sprintf("--url=http://localhost:%v/", APIPort),
+		fmt.Sprintf("--filename=%v", filename),
+		fmt.Sprintf("--namespace=%v", namespace),
+		fmt.Sprintf("--log_file=%v", filepath.Join(tempDir, "bulkloader.log")),
+		fmt.Sprintf("--db_filename=%v", filepath.Join(tempDir, "bulkloader-progress.sql3")),
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("Failed in upload_data: %v output: %v", err, output)
+	}
+
+	return nil
 }
 
 // LogLevel はログレベルです。

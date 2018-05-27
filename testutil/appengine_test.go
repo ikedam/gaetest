@@ -3,9 +3,12 @@ package testutil
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,6 +20,14 @@ import (
 )
 
 type entity struct {
+	Value string `datastore:",noindex"`
+}
+
+type anotherEntity struct {
+	Value string `datastore:",noindex"`
+}
+
+type yetAnotherEntity struct {
 	Value string `datastore:",noindex"`
 }
 
@@ -216,5 +227,187 @@ func TestMockInstance(t *testing.T) {
 		} else if errorLogList[0] != "Error in Get: Expected error" {
 			t.Errorf("Unexpected error message: %v", errorLogList)
 		}
+	}
+}
+
+func TestDatastoreClear(t *testing.T) {
+	ctx := GetAppengineContext()
+
+	if _ctx, err := appengine.Namespace(ctx, "testing"); err == nil {
+		ctx = _ctx
+	} else {
+		t.Fatalf("Failed to set namespace: %v", err)
+	}
+
+	entityKey := datastore.NewIncompleteKey(ctx, "entity", nil)
+	entityData := entity{
+		Value: "test1",
+	}
+	if _key, err := datastore.Put(ctx, entityKey, &entityData); err == nil {
+		entityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	anotherEntityKey := datastore.NewIncompleteKey(ctx, "anotherEntity", nil)
+	anotherEntityData := anotherEntity{
+		Value: "test2",
+	}
+	if _key, err := datastore.Put(ctx, anotherEntityKey, &anotherEntityData); err == nil {
+		anotherEntityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	if err := datastore.Get(ctx, entityKey, &entityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	}
+	if err := datastore.Get(ctx, anotherEntityKey, &anotherEntityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	}
+
+	if err := DatastoreClear(); err != nil {
+		t.Fatalf("Failed to DatastoreClear(): %v", err)
+	}
+
+	if err := datastore.Get(ctx, entityKey, &entityData); err != datastore.ErrNoSuchEntity {
+		t.Fatalf("Expect datastore.ErrNoSuchEntity, but was: %v", err)
+	}
+	if err := datastore.Get(ctx, anotherEntityKey, &anotherEntityData); err != datastore.ErrNoSuchEntity {
+		t.Fatalf("Expect datastore.ErrNoSuchEntity, but was: %v", err)
+	}
+}
+
+func TestDatastoreDumpAndRestore(t *testing.T) {
+	var tempDir string
+	if _tempDir, err := ioutil.TempDir("", "testutil"); err == nil {
+		tempDir = _tempDir
+	} else {
+		t.Fatalf("Failed to create a temporary directory: %v", err)
+	}
+	dumpFile := filepath.Join(tempDir, "dump.dat")
+
+	defer os.RemoveAll(tempDir)
+
+	ctx := GetAppengineContext()
+
+	if _ctx, err := appengine.Namespace(ctx, "testing"); err == nil {
+		ctx = _ctx
+	} else {
+		t.Fatalf("Failed to set namespace: %v", err)
+	}
+
+	entityKey := datastore.NewIncompleteKey(ctx, "entity", nil)
+	entityData := entity{
+		Value: "test1",
+	}
+	if _key, err := datastore.Put(ctx, entityKey, &entityData); err == nil {
+		entityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	anotherEntityKey := datastore.NewIncompleteKey(ctx, "anotherEntity", nil)
+	anotherEntityData := anotherEntity{
+		Value: "test2",
+	}
+	if _key, err := datastore.Put(ctx, anotherEntityKey, &anotherEntityData); err == nil {
+		anotherEntityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	yetAnotherEntityKey := datastore.NewIncompleteKey(ctx, "yetAnotherEntity", nil)
+	yetAnotherEntityData := yetAnotherEntity{
+		Value: "test3",
+	}
+	if _key, err := datastore.Put(ctx, yetAnotherEntityKey, &yetAnotherEntityData); err == nil {
+		yetAnotherEntityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	if err := DatastoreDump(dumpFile, "testing", []string{"entity", "anotherEntity"}); err != nil {
+		t.Fatalf("Failed to DatastoreDump(): %v", err)
+	}
+
+	if err := DatastoreClear(); err != nil {
+		t.Fatalf("Failed to DatastoreClear(): %v", err)
+	}
+
+	if err := DatastoreRestore(dumpFile, "testing"); err != nil {
+		t.Fatalf("Failed to DatastoreRestore(): %v", err)
+	}
+
+	if err := datastore.Get(ctx, entityKey, &entityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	} else if entityData.Value != "test1" {
+		t.Fatalf("Unexpected data: %+v", entityData)
+	}
+	if err := datastore.Get(ctx, anotherEntityKey, &anotherEntityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	} else if anotherEntityData.Value != "test2" {
+		t.Fatalf("Unexpected data: %+v", anotherEntityData)
+	}
+	if err := datastore.Get(ctx, yetAnotherEntityKey, &yetAnotherEntityData); err != datastore.ErrNoSuchEntity {
+		t.Fatalf("Expect datastore.ErrNoSuchEntity, but was: %v", err)
+	}
+}
+
+func TestDatastoreDumpAndRestoreDontCleanData(t *testing.T) {
+	var tempDir string
+	if _tempDir, err := ioutil.TempDir("", "testutil"); err == nil {
+		tempDir = _tempDir
+	} else {
+		t.Fatalf("Failed to create a temporary directory: %v", err)
+	}
+	dumpFile := filepath.Join(tempDir, "dump.dat")
+
+	defer os.RemoveAll(tempDir)
+
+	ctx := GetAppengineContext()
+	if _ctx, err := appengine.Namespace(ctx, "testing"); err == nil {
+		ctx = _ctx
+	} else {
+		t.Fatalf("Failed to set namespace: %v", err)
+	}
+
+	entityKey := datastore.NewIncompleteKey(ctx, "entity", nil)
+	entityData := entity{
+		Value: "test1",
+	}
+	if _key, err := datastore.Put(ctx, entityKey, &entityData); err == nil {
+		entityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	anotherEntityKey := datastore.NewIncompleteKey(ctx, "anotherEntity", nil)
+	anotherEntityData := anotherEntity{
+		Value: "test2",
+	}
+	if _key, err := datastore.Put(ctx, anotherEntityKey, &anotherEntityData); err == nil {
+		anotherEntityKey = _key
+	} else {
+		t.Fatalf("Failed to put data: %v", err)
+	}
+
+	if err := DatastoreDump(dumpFile, "testing", []string{"entity", "anotherEntity"}); err != nil {
+		t.Fatalf("Failed to DatastoreDump(): %v", err)
+	}
+
+	if err := DatastoreRestore(dumpFile, "testing"); err != nil {
+		t.Fatalf("Failed to DatastoreRestore(): %v", err)
+	}
+
+	if err := datastore.Get(ctx, entityKey, &entityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	} else if entityData.Value != "test1" {
+		t.Fatalf("Unexpected data: %+v", entityData)
+	}
+	if err := datastore.Get(ctx, anotherEntityKey, &anotherEntityData); err != nil {
+		t.Fatalf("Failed to get data: %v", err)
+	} else if anotherEntityData.Value != "test2" {
+		t.Fatalf("Unexpected data: %+v", anotherEntityData)
 	}
 }
