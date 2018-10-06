@@ -18,3 +18,4 @@ exports.config['capabilities'] =  {
     ]
   }
 };
+exports.config['chromeDriver'] = '/usr/bin/chromedriver';
