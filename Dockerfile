@@ -10,7 +10,7 @@ RUN apk add --no-cache yarn chromium chromium-chromedriver
 
 ## external packages
 # nodejs & yarn
-ARG NODEJS_VERSION="6.11.2"
+ARG NODEJS_VERSION="8.11.4"
 ARG NODEJS_URL="https://nodejs.org/dist/v${NODEJS_VERSION}/node-v${NODEJS_VERSION}-linux-x64.tar.xz"
 
 RUN curl -o node.tar.xz ${NODEJS_URL} \
@@ -18,7 +18,7 @@ RUN curl -o node.tar.xz ${NODEJS_URL} \
 	&& tar xJ -C /usr/local/nodejs -f node.tar.xz --strip 1 \
 	&& rm -f node.tar.xz
 
-ARG GOAPP_VERSION="1.9.58"
+ARG GOAPP_VERSION="1.9.68"
 ARG GOAPP_URL="https://storage.googleapis.com/appengine-sdks/featured/go_appengine_sdk_linux_amd64-${GOAPP_VERSION}.zip"
 
 RUN curl -o go_appengine.zip ${GOAPP_URL} \
