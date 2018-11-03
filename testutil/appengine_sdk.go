@@ -32,20 +32,13 @@ type internal_context_mock struct {
 }
 
 func (i *mockInstance) newRequest(method, urlStr string, body io.Reader) (*http.Request, error) {
-	baseReq, err := i.base.NewRequest(method, urlStr, body)
+	req, err := i.base.NewRequest(method, urlStr, body)
 	if err != nil {
 		return nil, err
 	}
 
-	// as there's no way to replace the context already registered,
-	// create a new one and register it.
-	req, err := http.NewRequest(method, urlStr, body)
-	if err != nil {
-		return nil, err
-	}
-
-	baseAppengineContext := appengine_internal.NewContext(baseReq)
-	baseContext := appengine.NewContext(baseReq)
+	baseAppengineContext := appengine_internal.NewContext(req)
+	baseContext := appengine.NewContext(req)
 	ctx := &internal_context_mock{
 		baseAppengineContext: baseAppengineContext,
 		baseContext:          i.mocker.MockContext(baseContext),
@@ -53,10 +46,11 @@ func (i *mockInstance) newRequest(method, urlStr string, body io.Reader) (*http.
 		mocker:               i.mocker,
 	}
 
-	r, release := appengine_internal.RegisterTestContext(req, ctx)
-	i.releaseList = append(i.releaseList, release)
-
-	return r, nil
+	return req.WithContext(context.WithValue(
+		req.Context(),
+		appengine_internal.ContextKey,
+		ctx,
+	)), nil
 }
 
 func (c *internal_context_mock) Debugf(format string, args ...interface{}) {

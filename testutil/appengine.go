@@ -328,9 +328,8 @@ func (m *AppengineMock) MockContext(ctx context.Context) context.Context {
 }
 
 type mockInstance struct {
-	base        aetest.Instance
-	mocker      *AppengineMock
-	releaseList []func()
+	base   aetest.Instance
+	mocker *AppengineMock
 }
 
 // MockInstance は Appengine の Instance をモック化します。
@@ -349,10 +348,7 @@ func (i *mockInstance) NewRequest(method, urlStr string, body io.Reader) (*http.
 }
 
 func (i *mockInstance) Close() (err error) {
-	for _, f := range i.releaseList {
-		f()
-	}
-	return nil
+	return i.base.Close()
 }
 
 // AddAPICallMock は API 呼び出しのモック処理を追加します。
