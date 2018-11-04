@@ -3,14 +3,17 @@ package testutil
 // aetest の高速化をはかります。
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -22,14 +25,20 @@ import (
 	"google.golang.org/appengine/aetest"
 )
 
+// Instance は aetest.Instance にポート番号キャプチャ用の情報を追加したものです。
+type Instance struct {
+	baseInstance aetest.Instance
+	pipeIn       *os.File
+	pipeOut      *os.File
+	pipeChan     chan error
+	APIURL       *url.URL
+}
+
 var (
-	inst aetest.Instance
+	inst *Instance
 
 	// ErrNotSupported は操作がサポートされていない場合に返るエラーです。
 	ErrNotSupported = errors.New("Not supported in this environment")
-
-	// APIPort は dev_appserver の API Port です。
-	APIPort = 8090
 )
 
 func setupAppengine() {
@@ -90,6 +99,10 @@ func saveEnv(envs ...string) func() {
 
 // NewInstance はテスト用に最適化したオプションで GAE のインスタンスを起動します。
 func NewInstance(opts *aetest.Options) (aetest.Instance, error) {
+	return newInstance(opts)
+}
+
+func newInstance(opts *aetest.Options) (*Instance, error) {
 	restoreEnv := saveEnv(
 		"APPENGINE_DEV_APPSERVER",
 		"APPENGINE_DEV_APPSERVER_BASE",
@@ -103,10 +116,67 @@ func NewInstance(opts *aetest.Options) (aetest.Instance, error) {
 	if err := os.Setenv("APPENGINE_DEV_APPSERVER", findDevAppserverWrapper()); err != nil {
 		panic(err)
 	}
-	if err := os.Setenv("DEV_APPSERVER_API_PORT", fmt.Sprintf("%v", APIPort)); err != nil {
-		panic(err)
+
+	// ポートキャプチャ用の処理の追加
+	var err error
+	inst := &Instance{}
+	func() {
+		origStderr := os.Stderr
+		// INFO     2018-11-04 01:49:46,430 api_server.py:275] Starting API server at: http://localhost:53276
+		reg := regexp.MustCompile("Starting API server at: (.*)$")
+		if _pipeOut, _pipeIn, err := os.Pipe(); err == nil {
+			inst.pipeOut = _pipeOut
+			inst.pipeIn = _pipeIn
+			inst.pipeChan = make(chan error, 1)
+			os.Stderr = inst.pipeIn
+			defer func() { os.Stderr = origStderr }()
+			go func() {
+				s := bufio.NewScanner(inst.pipeOut)
+				for s.Scan() {
+					origStderr.WriteString(fmt.Sprintf("%v\n", s.Text()))
+					if inst.APIURL == nil {
+						if match := reg.FindStringSubmatch(s.Text()); match != nil {
+							if u, err := url.Parse(match[1]); err == nil {
+								inst.APIURL = u
+							}
+						}
+					}
+				}
+				inst.pipeChan <- s.Err()
+			}()
+		}
+		inst.baseInstance, err = aetest.NewInstance(opts)
+	}()
+	if err != nil {
+		inst.Close()
+		return nil, err
 	}
-	return aetest.NewInstance(opts)
+	return inst, nil
+}
+
+// Close はインスタンスの停止処理を行います。
+func (i *Instance) Close() error {
+	if i.baseInstance != nil {
+		if err := i.baseInstance.Close(); err != nil {
+			return err
+		}
+	}
+	if i.pipeChan != nil {
+		i.pipeIn.Close()
+		i.pipeOut.Close()
+		select {
+		case <-i.pipeChan:
+		}
+		i.pipeChan = nil
+		i.pipeIn = nil
+		i.pipeOut = nil
+	}
+	return nil
+}
+
+// NewRequest はインスタンスへの新しいリクエストを作成します。
+func (i *Instance) NewRequest(method, urlStr string, body io.Reader) (*http.Request, error) {
+	return i.baseInstance.NewRequest(method, urlStr, body)
 }
 
 // GetAppengineInstance はテスト用の GAE のインスタンスを返します。
@@ -117,7 +187,7 @@ func GetAppengineInstance() aetest.Instance {
 		return inst
 	}
 	var err error
-	inst, err = NewInstance(&aetest.Options{
+	inst, err = newInstance(&aetest.Options{
 		StronglyConsistentDatastore: true,
 	})
 	if err != nil {
@@ -154,9 +224,9 @@ func GetAppengineContextFor(inst aetest.Instance) context.Context {
 
 // DatastoreClear は Datastore を初期化します。
 func DatastoreClear() error {
-	url := fmt.Sprintf("http://localhost:%v/clear?stub=datastore_v3", APIPort)
+	url := fmt.Sprintf("%v/clear?stub=datastore_v3", inst.APIURL)
 	var resp *http.Response
-	if _resp, err := http.Get(url); err != nil {
+	if _resp, err := http.Get(url); err == nil {
 		resp = _resp
 	} else {
 		return err
@@ -203,7 +273,7 @@ func DatastoreDump(filename string, namespace string, kinds []string) error {
 		findPython(),
 		findAppcfg(),
 		"download_data",
-		fmt.Sprintf("--url=http://localhost:%v/", APIPort),
+		fmt.Sprintf("--url=%v/", inst.APIURL),
 		fmt.Sprintf("--filename=%v", filename),
 		fmt.Sprintf("--namespace=%v", namespace),
 		fmt.Sprintf("--kind=(%v)", strings.Join(kinds, ",")),
@@ -234,7 +304,7 @@ func DatastoreRestore(filename string, namespace string) error {
 		findPython(),
 		findAppcfg(),
 		"upload_data",
-		fmt.Sprintf("--url=http://localhost:%v/", APIPort),
+		fmt.Sprintf("--url=%s/", inst.APIURL),
 		fmt.Sprintf("--filename=%v", filename),
 		fmt.Sprintf("--namespace=%v", namespace),
 		fmt.Sprintf("--log_file=%v", filepath.Join(tempDir, "bulkloader.log")),

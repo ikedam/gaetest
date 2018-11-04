@@ -40,7 +40,7 @@ def buildArguments():
     args, unknown = parser.parse_known_args()
 
     apiPort = os.environ.get('DEV_APPSERVER_API_PORT')
-    if apiPort.isdigit():
+    if apiPort and apiPort.isdigit():
         args.api_port = long(apiPort)
 
     return [
